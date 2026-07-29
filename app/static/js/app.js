@@ -476,5 +476,15 @@ document.getElementById('btn-add-ln').addEventListener('click', async () => {
   }
 });
 
+document.getElementById('btn-toggle-ref')?.addEventListener('click', () => {
+  const body = document.querySelector('.goose-log-body');
+  const btn = document.getElementById('btn-toggle-ref');
+  const hidden = body?.classList.toggle('ref-hidden');
+  if (btn) {
+    btn.textContent = hidden ? 'Show Reference' : 'Hide Reference';
+    btn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+  }
+});
+
 connectWebSocket();
 fetch('/api/state').then(r => r.json()).then(render);

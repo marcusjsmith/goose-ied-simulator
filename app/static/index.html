@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IEC 61850 GOOSE IED Simulator</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=3">
+  <link rel="stylesheet" href="/static/css/style.css?v=5">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -151,11 +151,98 @@
           <h3>Live GOOSE Messages</h3>
           <div class="goose-log-actions">
             <span class="goose-log-count" id="goose-log-count">0 messages</span>
+            <button class="btn btn-sm btn-outline" type="button" id="btn-toggle-ref" aria-expanded="true" aria-controls="goose-log-ref">Hide Reference</button>
             <button class="btn btn-sm btn-outline" id="btn-clear-log">Clear</button>
           </div>
         </div>
-        <div class="goose-log-window" id="goose-log-window">
-          <div class="goose-log-empty">Start GOOSE publishing to see live messages and payload breakout here.</div>
+        <div class="goose-log-body">
+          <div class="goose-log-window" id="goose-log-window">
+            <div class="goose-log-empty">Start GOOSE publishing to see live messages and payload breakout here.</div>
+          </div>
+          <aside class="goose-log-ref" id="goose-log-ref" aria-label="GOOSE parameter reference">
+            <div class="goose-log-ref-title">Parameter Reference</div>
+            <p class="goose-log-ref-intro">Fields shown when you expand a message in the log.</p>
+
+            <div class="goose-ref-group">
+              <div class="goose-ref-group-title">Message header</div>
+              <dl class="goose-ref-list">
+                <dt>STATE CHANGE</dt>
+                <dd>Dataset value changed; <code>stNum</code> incremented.</dd>
+                <dt>RETRANSMIT</dt>
+                <dd>Periodic refresh with unchanged data; only <code>sqNum</code> advances.</dd>
+                <dt>stNum / sqNum</dt>
+                <dd>Quick summary of state and sequence numbers for the frame.</dd>
+              </dl>
+            </div>
+
+            <div class="goose-ref-group">
+              <div class="goose-ref-group-title">Ethernet header</div>
+              <dl class="goose-ref-list">
+                <dt>Destination MAC</dt>
+                <dd>IEC 61850 multicast address (<code>01-0C-CD-01-00-XX</code>) — all subscribers listen on this MAC.</dd>
+                <dt>Source MAC</dt>
+                <dd>MAC address of the publishing IED port.</dd>
+                <dt>EtherType</dt>
+                <dd><code>0x88B8</code> identifies a GOOSE ethertype frame.</dd>
+                <dt>APPID</dt>
+                <dd>Application ID — distinguishes this GOOSE stream on the substation LAN.</dd>
+                <dt>Length</dt>
+                <dd>Length of the GOOSE PDU payload in bytes.</dd>
+              </dl>
+            </div>
+
+            <div class="goose-ref-group">
+              <div class="goose-ref-group-title">GOOSE PDU</div>
+              <dl class="goose-ref-list">
+                <dt>gocbRef</dt>
+                <dd>GOOSE control block reference (e.g. <code>IED/LLN0$GO$GcbName</code>).</dd>
+                <dt>datSet</dt>
+                <dd>Dataset bound to this GoCB — lists the logical-node attributes being published.</dd>
+                <dt>goID</dt>
+                <dd>Human-readable GOOSE identifier for operators and configuration tools.</dd>
+                <dt>timeAllowedToLive</dt>
+                <dd>Maximum time (ms) before subscribers treat the message as expired if no update arrives.</dd>
+                <dt>t</dt>
+                <dd>UTC timestamp of the event or publication instant.</dd>
+                <dt>stNum</dt>
+                <dd>State number — increments whenever any dataset value changes.</dd>
+                <dt>sqNum</dt>
+                <dd>Sequence number — increments on every transmission, including retransmits.</dd>
+                <dt>confRev</dt>
+                <dd>Configuration revision — bump when GoCB or dataset membership changes.</dd>
+                <dt>test</dt>
+                <dd><code>TRUE</code> = test mode; protection functions should ignore the message.</dd>
+                <dt>ndsCom</dt>
+                <dd><code>TRUE</code> = dataset not yet commissioned; data may be incomplete.</dd>
+                <dt>numDatSetEntries</dt>
+                <dd>Number of encoded values carried in the dataset.</dd>
+              </dl>
+            </div>
+
+            <div class="goose-ref-group">
+              <div class="goose-ref-group-title">Dataset payload</div>
+              <dl class="goose-ref-list">
+                <dt>#</dt>
+                <dd>Zero-based index of the entry in the published dataset.</dd>
+                <dt>Reference</dt>
+                <dd>MMS object reference (logical node + data attribute path).</dd>
+                <dt>Type</dt>
+                <dd>MMS type: <code>boolean</code>, <code>dbpos</code>, <code>quality</code>, <code>float32</code>, etc.</dd>
+                <dt>Value</dt>
+                <dd>Decoded engineering value (position, measurement, quality flag, …).</dd>
+                <dt>BER Hex</dt>
+                <dd>ASN.1 BER encoding of this entry as sent on the wire.</dd>
+              </dl>
+            </div>
+
+            <div class="goose-ref-group">
+              <div class="goose-ref-group-title">Full frame hex</div>
+              <dl class="goose-ref-list">
+                <dt>Full Frame Hex</dt>
+                <dd>Complete Ethernet frame (header + GOOSE PDU) as hexadecimal bytes for protocol analysis.</dd>
+              </dl>
+            </div>
+          </aside>
         </div>
       </div>
     </section>
@@ -190,6 +277,6 @@
     </aside>
   </main>
 
-  <script src="/static/js/app.js?v=3"></script>
+  <script src="/static/js/app.js?v=4"></script>
 </body>
 </html>

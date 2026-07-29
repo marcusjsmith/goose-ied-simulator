@@ -431,13 +431,106 @@ body {
   color: var(--text-muted);
 }
 
+.goose-log-body {
+  display: flex;
+  min-height: var(--goose-log-height);
+  --goose-log-height: min(62vh, 720px);
+}
+
+.goose-log-body.ref-hidden .goose-log-ref {
+  display: none;
+}
+
 .goose-log-window {
-  height: 320px;
+  flex: 1;
+  min-width: 0;
+  height: var(--goose-log-height);
+  min-height: 520px;
   overflow-y: auto;
   padding: 0.75rem;
   font-family: var(--mono);
   font-size: 0.72rem;
   line-height: 1.5;
+}
+
+.goose-log-ref {
+  width: 300px;
+  flex-shrink: 0;
+  height: var(--goose-log-height);
+  min-height: 520px;
+  overflow-y: auto;
+  padding: 0.75rem;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  font-family: var(--font);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.goose-log-ref-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.35rem;
+}
+
+.goose-log-ref-intro {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin-bottom: 0.75rem;
+}
+
+.goose-ref-group {
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.6rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.goose-ref-group:last-child {
+  margin-bottom: 0;
+}
+
+.goose-ref-group-title {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.goose-ref-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.6rem;
+  margin: 0;
+}
+
+.goose-ref-list dt {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #7ee787;
+  white-space: nowrap;
+}
+
+.goose-ref-list dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.68rem;
+}
+
+.goose-ref-list code {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--accent);
+  background: rgba(0, 188, 255, 0.08);
+  padding: 0.05rem 0.25rem;
+  border-radius: 3px;
 }
 
 .goose-log-empty {
