@@ -395,8 +395,13 @@ function updateGooseLog(data) {
 
   const headId = log[0]?.id ?? null;
   if (headId !== lastLogHeadId) {
-    expandedMessageId = headId;
+    const isFirstEntry = lastLogHeadId === null;
+    const isStateChange = log[0]?.state_change;
     lastLogHeadId = headId;
+    // Only auto-expand state changes or the first message — not every retransmit
+    if (isStateChange || isFirstEntry) {
+      expandedMessageId = headId;
+    }
   }
 
   const wasAtTop = windowEl.scrollTop < 20;
