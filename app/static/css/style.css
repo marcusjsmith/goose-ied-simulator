@@ -165,10 +165,21 @@ body {
 .reading { fill: var(--accent); text-anchor: middle; font-family: var(--mono); transition: fill 0.3s; }
 .reading.live-flash { fill: #7ee787; }
 .ied-reading tspan.live-flash { fill: #7ee787; transition: fill 0.4s; }
-.instrument { fill: none; stroke: #718096; stroke-width: 1.5; }
-.inst-text { fill: #718096; font-size: 8px; text-anchor: middle; font-family: var(--mono); }
-.ied-link { fill: none; stroke: #a78bfa; stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.85; }
-.ied-link-label { font-size: 9px; fill: #a78bfa; }
+.instrument { fill: none; stroke-width: 1.5; }
+.instrument-ct .instrument { stroke: #f59e0b; }
+.instrument-ct .inst-text { fill: #fbbf24; }
+.instrument-vt .instrument { stroke: #22d3ee; }
+.instrument-vt .inst-text { fill: #67e8f9; }
+.inst-text { font-size: 8px; text-anchor: middle; font-family: var(--mono); }
+.ied-link { fill: none; stroke-width: 1.75; stroke-dasharray: 6 4; opacity: 0.95; }
+.ied-link-ct { stroke: #f59e0b; }
+.ied-link-vt { stroke: #22d3ee; }
+.ied-link-label { font-size: 9px; font-weight: 600; }
+.ied-link-label-ct { fill: #fbbf24; }
+.ied-link-label-vt { fill: #67e8f9; }
+.ied-port { stroke-width: 1.5; }
+.ied-port-ct { fill: #f59e0b; stroke: #fbbf24; }
+.ied-port-vt { fill: #22d3ee; stroke: #67e8f9; }
 .ied-eth-port { fill: #4a5568; stroke: var(--accent); stroke-width: 1; }
 .ied-rect { fill: var(--surface2); stroke: var(--accent); stroke-width: 2; }
 .ied-title { fill: var(--text); font-size: 14px; font-weight: 700; text-anchor: middle; font-family: var(--mono); }

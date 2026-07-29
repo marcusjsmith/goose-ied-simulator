@@ -83,20 +83,22 @@
           <text x="200" y="375" class="label reading" id="load-power">12.5 MW</text>
 
           <!-- CT / VT symbols -->
-          <g id="ct-symbol" transform="translate(160,260)">
+          <g id="ct-symbol" class="instrument-ct" transform="translate(155,268)">
             <circle cx="0" cy="0" r="10" class="instrument"/>
             <text x="0" y="4" class="inst-text">CT</text>
           </g>
-          <g id="vt-symbol" transform="translate(240,260)">
+          <g id="vt-symbol" class="instrument-vt" transform="translate(245,268)">
             <circle cx="0" cy="0" r="10" class="instrument"/>
             <text x="0" y="4" class="inst-text">VT</text>
           </g>
 
-          <!-- IED sampling links (CT / VT → IED) -->
-          <path d="M 170 260 L 300 260 L 300 188 L 500 188" class="ied-link"/>
-          <path d="M 230 260 L 340 260 L 340 238 L 500 238" class="ied-link"/>
-          <text x="305" y="252" class="label ied-link-label">Current</text>
-          <text x="345" y="252" class="label ied-link-label">Voltage</text>
+          <!-- IED sampling links (CT / VT → IED) — separated routes, distinct colours -->
+          <path d="M 165 268 L 115 268 L 115 168 L 500 168" class="ied-link ied-link-ct"/>
+          <path d="M 255 268 L 305 268 L 305 232 L 500 232" class="ied-link ied-link-vt"/>
+          <circle cx="500" cy="168" r="3" class="ied-port ied-port-ct"/>
+          <circle cx="500" cy="232" r="3" class="ied-port ied-port-vt"/>
+          <text x="128" y="260" class="label ied-link-label ied-link-label-ct">Current</text>
+          <text x="278" y="260" class="label ied-link-label ied-link-label-vt">Voltage</text>
 
           <!-- IED box -->
           <g id="ied-box" transform="translate(500,140)">
