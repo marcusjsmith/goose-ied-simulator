@@ -29,6 +29,8 @@ state = SubstationState()
 publisher: GoosePublisher | None = None
 ws_clients: set[WebSocket] = set()
 _state_lock = threading.Lock()
+_goose_message_log: list[dict] = []
+_MAX_MESSAGE_LOG = 100
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -50,9 +52,13 @@ def _build_publisher() -> GoosePublisher:
     )
     pub = GoosePublisher(config=config)
 
-    def on_publish(stats: dict) -> None:
+    def on_publish(payload: dict) -> None:
+        detail = payload.get("detail")
         with _state_lock:
-            state.goose_stats = stats
+            state.goose_stats = {k: v for k, v in payload.items() if k != "detail"}
+            if detail:
+                _goose_message_log.insert(0, detail)
+                del _goose_message_log[_MAX_MESSAGE_LOG:]
         asyncio.run_coroutine_threadsafe(broadcast_state(), main_loop)
 
     pub.set_on_publish(on_publish)
@@ -90,6 +96,8 @@ def sync_publisher_dataset(trigger: bool = False) -> dict | None:
 def get_state_dict() -> dict:
     with _state_lock:
         data = state.to_dict()
+        data["goose_message_log"] = list(_goose_message_log)
+        data["latest_goose_message"] = _goose_message_log[0] if _goose_message_log else None
         if publisher:
             data["goose_config"] = {
                 "interface": publisher.config.interface,
@@ -103,15 +111,46 @@ def get_state_dict() -> dict:
         return data
 
 
+_measurements_task: asyncio.Task | None = None
+_MEASUREMENTS_INTERVAL_S = 0.5
+
+
+async def _measurements_loop() -> None:
+    """Periodically update V/I/P and push live readings to clients and GOOSE dataset."""
+    while True:
+        try:
+            with _state_lock:
+                state.update_live_measurements()
+                dataset = state.build_goose_dataset()
+                running = state.publisher_running
+
+            if publisher and running:
+                publisher.set_dataset(dataset)
+
+            if ws_clients:
+                await broadcast_state()
+        except Exception:
+            logger.exception("Measurements loop error")
+        await asyncio.sleep(_MEASUREMENTS_INTERVAL_S)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global main_loop, publisher
+    global main_loop, publisher, _measurements_task
     main_loop = asyncio.get_running_loop()
     publisher = _build_publisher()
     with _state_lock:
+        state.update_live_measurements()
         publisher.set_dataset(state.build_goose_dataset())
+    _measurements_task = asyncio.create_task(_measurements_loop())
     logger.info("GOOSE IED Simulator ready")
     yield
+    if _measurements_task:
+        _measurements_task.cancel()
+        try:
+            await _measurements_task
+        except asyncio.CancelledError:
+            pass
     if publisher:
         publisher.stop()
 
@@ -172,6 +211,15 @@ async def stop_publisher():
         state.publisher_running = False
     await broadcast_state()
     return {"status": "stopped"}
+
+
+@app.post("/api/goose/messages/clear")
+async def clear_goose_messages():
+    global _goose_message_log
+    with _state_lock:
+        _goose_message_log.clear()
+    await broadcast_state()
+    return {"status": "cleared"}
 
 
 @app.post("/api/publisher/publish")

@@ -83,14 +83,20 @@
           <text x="200" y="375" class="label reading" id="load-power">12.5 MW</text>
 
           <!-- CT / VT symbols -->
-          <g transform="translate(160,260)">
+          <g id="ct-symbol" transform="translate(160,260)">
             <circle cx="0" cy="0" r="10" class="instrument"/>
             <text x="0" y="4" class="inst-text">CT</text>
           </g>
-          <g transform="translate(240,260)">
+          <g id="vt-symbol" transform="translate(240,260)">
             <circle cx="0" cy="0" r="10" class="instrument"/>
             <text x="0" y="4" class="inst-text">VT</text>
           </g>
+
+          <!-- IED sampling links (CT / VT → IED) -->
+          <path d="M 170 260 L 300 260 L 300 188 L 500 188" class="ied-link"/>
+          <path d="M 230 260 L 340 260 L 340 238 L 500 238" class="ied-link"/>
+          <text x="305" y="252" class="label ied-link-label">Current</text>
+          <text x="345" y="252" class="label ied-link-label">Voltage</text>
 
           <!-- IED box -->
           <g id="ied-box" transform="translate(500,140)">
@@ -103,12 +109,25 @@
             <text x="20" y="122" class="ied-reading">P: <tspan id="ied-power">12.5 MW</tspan></text>
             <text x="20" y="142" class="ied-reading">f: <tspan id="ied-freq">50.0 Hz</tspan></text>
             <circle cx="185" cy="20" r="6" class="ied-led" id="ied-led"/>
+            <rect x="196" y="74" width="6" height="12" rx="1" class="ied-eth-port"/>
           </g>
 
-          <!-- GOOSE multicast arrow -->
-          <path d="M 500 200 Q 380 200 280 200" class="goose-path" marker-end="url(#arrow)"/>
-          <text x="380" y="190" class="label goose-label">GOOSE Multicast</text>
-          <text x="380" y="215" class="label goose-mac" id="goose-mac">01:0C:CD:01:00:01</text>
+          <!-- GOOSE multicast to Station Bus switch -->
+          <path d="M 700 220 L 760 220" class="goose-path" id="goose-path" marker-end="url(#arrow)"/>
+          <text x="734" y="210" class="label goose-label">GOOSE Multicast</text>
+          <text x="734" y="235" class="label goose-mac" id="goose-mac">01:0C:CD:01:00:01</text>
+
+          <!-- Station Bus network switch -->
+          <g id="station-bus" transform="translate(760,195)">
+            <rect x="0" y="0" width="100" height="50" rx="4" class="switch-box"/>
+            <text x="50" y="30" class="switch-title">Station Bus</text>
+            <line x1="15" y1="50" x2="15" y2="58" class="switch-port"/>
+            <line x1="35" y1="50" x2="35" y2="58" class="switch-port"/>
+            <line x1="50" y1="50" x2="50" y2="58" class="switch-port"/>
+            <line x1="65" y1="50" x2="65" y2="58" class="switch-port"/>
+            <line x1="85" y1="50" x2="85" y2="58" class="switch-port"/>
+            <circle cx="0" cy="25" r="4" class="switch-led" id="switch-led"/>
+          </g>
 
           <!-- Fault overlay -->
           <g id="fault-overlay" class="hidden">
@@ -123,6 +142,19 @@
         <button class="btn btn-success" id="btn-start">Start GOOSE</button>
         <button class="btn btn-danger" id="btn-stop">Stop GOOSE</button>
         <button class="btn btn-secondary" id="btn-publish">Publish Now</button>
+      </div>
+
+      <div class="goose-log-panel">
+        <div class="goose-log-header">
+          <h3>Live GOOSE Messages</h3>
+          <div class="goose-log-actions">
+            <span class="goose-log-count" id="goose-log-count">0 messages</span>
+            <button class="btn btn-sm btn-outline" id="btn-clear-log">Clear</button>
+          </div>
+        </div>
+        <div class="goose-log-window" id="goose-log-window">
+          <div class="goose-log-empty">Start GOOSE publishing to see live messages and payload breakout here.</div>
+        </div>
       </div>
     </section>
 

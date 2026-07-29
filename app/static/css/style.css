@@ -162,18 +162,33 @@ body {
 .bus-label { fill: var(--accent); font-weight: 600; text-anchor: middle; }
 .load-box { fill: var(--surface2); stroke: #4a5568; }
 .load-label { text-anchor: middle; }
-.reading { fill: var(--accent); text-anchor: middle; font-family: var(--mono); }
+.reading { fill: var(--accent); text-anchor: middle; font-family: var(--mono); transition: fill 0.3s; }
+.reading.live-flash { fill: #7ee787; }
+.ied-reading tspan.live-flash { fill: #7ee787; transition: fill 0.4s; }
 .instrument { fill: none; stroke: #718096; stroke-width: 1.5; }
 .inst-text { fill: #718096; font-size: 8px; text-anchor: middle; font-family: var(--mono); }
+.ied-link { fill: none; stroke: #a78bfa; stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.85; }
+.ied-link-label { font-size: 9px; fill: #a78bfa; }
+.ied-eth-port { fill: #4a5568; stroke: var(--accent); stroke-width: 1; }
 .ied-rect { fill: var(--surface2); stroke: var(--accent); stroke-width: 2; }
 .ied-title { fill: var(--text); font-size: 14px; font-weight: 700; text-anchor: middle; font-family: var(--mono); }
 .ied-sub { fill: var(--text-muted); font-size: 10px; text-anchor: middle; }
 .ied-reading { fill: var(--text); font-size: 11px; font-family: var(--mono); }
 .ied-led { fill: var(--success); transition: fill 0.3s; }
 .ied-led.fault { fill: var(--danger); animation: pulse 0.8s infinite; }
-.goose-path { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; opacity: 0.7; }
+.goose-path { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 8 5; opacity: 0.9; }
+.goose-path.active { animation: goose-flow 1s linear infinite; }
 .goose-label { fill: var(--accent); text-anchor: middle; font-size: 10px; }
 .goose-mac { fill: var(--text-muted); text-anchor: middle; font-size: 9px; font-family: var(--mono); }
+.switch-box { fill: var(--surface2); stroke: var(--accent); stroke-width: 2; }
+.switch-title { fill: var(--text); font-size: 11px; font-weight: 600; text-anchor: middle; font-family: var(--font); }
+.switch-port { stroke: #4a5568; stroke-width: 2; }
+.switch-led { fill: #4a5568; transition: fill 0.3s; }
+.switch-led.active { fill: var(--accent); animation: pulse 1.2s infinite; }
+
+@keyframes goose-flow {
+  to { stroke-dashoffset: -26; }
+}
 .fault-flash { fill: rgba(248, 81, 73, 0.08); }
 .fault-text { fill: var(--danger); font-size: 28px; font-weight: 700; text-anchor: middle; opacity: 0.9; }
 .hidden { display: none; }
@@ -345,3 +360,204 @@ body {
 
 .stats-grid dt { color: var(--text-muted); }
 .stats-grid dd { font-family: var(--mono); color: var(--accent); text-align: right; }
+
+/* Live GOOSE message log */
+.goose-log-panel {
+  border-top: 1px solid var(--border);
+  background: #0a0e14;
+}
+
+.goose-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.goose-log-header h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.goose-log-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.goose-log-count {
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  color: var(--text-muted);
+}
+
+.goose-log-window {
+  height: 320px;
+  overflow-y: auto;
+  padding: 0.75rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.goose-log-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2rem 1rem;
+  font-family: var(--font);
+  font-size: 0.85rem;
+}
+
+.goose-msg {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 0.6rem;
+  overflow: hidden;
+}
+
+.goose-msg.state-change {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 1px rgba(210, 153, 34, 0.2);
+}
+
+.goose-msg-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  background: var(--surface2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.goose-msg-header:hover {
+  background: #222a38;
+}
+
+.goose-msg-time {
+  color: var(--text-muted);
+  min-width: 90px;
+}
+
+.goose-msg-badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.goose-msg-badge.retransmit {
+  background: rgba(0, 188, 255, 0.15);
+  color: var(--accent);
+}
+
+.goose-msg-badge.state-change {
+  background: rgba(210, 153, 34, 0.2);
+  color: var(--warning);
+}
+
+.goose-msg-summary {
+  flex: 1;
+  color: var(--text);
+}
+
+.goose-msg-summary span {
+  color: var(--accent);
+}
+
+.goose-msg-toggle {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.goose-msg-body {
+  display: none;
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.goose-msg.expanded .goose-msg-body {
+  display: block;
+}
+
+.goose-msg.expanded .goose-msg-toggle {
+  transform: rotate(180deg);
+}
+
+.payload-section {
+  margin-bottom: 0.75rem;
+}
+
+.payload-section:last-child {
+  margin-bottom: 0;
+}
+
+.payload-section-title {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+
+.payload-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0.15rem 0.75rem;
+}
+
+.payload-grid dt {
+  color: var(--text-muted);
+}
+
+.payload-grid dd {
+  color: var(--text);
+  word-break: break-all;
+}
+
+.dataset-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.25rem;
+}
+
+.dataset-table th,
+.dataset-table td {
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.dataset-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.dataset-table td {
+  color: var(--text);
+}
+
+.dataset-table .col-idx { width: 32px; color: var(--text-muted); }
+.dataset-table .col-type { color: #a78bfa; }
+.dataset-table .col-val { color: var(--success); }
+.dataset-table .col-hex { color: var(--text-muted); font-size: 0.65rem; }
+
+.frame-hex {
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  word-break: break-all;
+  max-height: 80px;
+  overflow-y: auto;
+}

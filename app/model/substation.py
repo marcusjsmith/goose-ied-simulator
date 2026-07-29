@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import Enum
@@ -115,6 +117,50 @@ class SubstationState:
 
     def build_goose_dataset(self):
         return build_dataset(self.active_nodes)
+
+    def update_live_measurements(self, now: float | None = None) -> None:
+        """Animate MMXU1 V/I/P readings with realistic substation load variation."""
+        mmxu = self.get_node("MMXU1")
+        if not mmxu:
+            return
+
+        t = now if now is not None else time.time()
+        s1 = math.sin(t * 0.8)
+        s2 = math.sin(t * 1.4 + 1.1)
+        s3 = math.sin(t * 2.3 + 0.4)
+
+        if self.breaker_state == BreakerState.TRIPPING:
+            mmxu.values["PhV.phsA.cVal.mag.f"] = round(108.0 + 3.0 * s1, 2)
+            mmxu.values["A.phsA.cVal.mag.f"] = round(2800.0 + 350.0 * s2, 1)
+            mmxu.values["TotW.mag.f"] = round(38.0 + 4.0 * s1, 2)
+            mmxu.values["TotVAr.mag.f"] = round(8.5 + 1.2 * s2, 2)
+            mmxu.values["Hz.mag.f"] = round(49.0 + 0.25 * s3, 3)
+            return
+
+        if self.breaker_state == BreakerState.OPEN:
+            if self.active_fault == FaultType.EARTH_FAULT:
+                mmxu.values["PhV.phsA.cVal.mag.f"] = round(85.0 + 2.0 * s1, 2)
+                mmxu.values["A.phsA.cVal.mag.f"] = round(12.0 + 4.0 * abs(s2), 1)
+            elif self.active_fault == FaultType.BUS_DIFFERENTIAL:
+                mmxu.values["PhV.phsA.cVal.mag.f"] = round(105.0 + 4.0 * s1, 2)
+                mmxu.values["A.phsA.cVal.mag.f"] = round(120.0 + 30.0 * abs(s2), 1)
+            elif self.active_fault == FaultType.OVERCURRENT:
+                mmxu.values["PhV.phsA.cVal.mag.f"] = round(109.5 + 0.8 * s1, 2)
+                mmxu.values["A.phsA.cVal.mag.f"] = round(18.0 + 6.0 * abs(s2), 1)
+            else:
+                mmxu.values["PhV.phsA.cVal.mag.f"] = round(110.0 + 0.4 * s1, 2)
+                mmxu.values["A.phsA.cVal.mag.f"] = round(2.0 + 1.2 * abs(s3), 1)
+            mmxu.values["TotW.mag.f"] = round(max(0.0, 0.08 * abs(s2)), 3)
+            mmxu.values["TotVAr.mag.f"] = round(0.12 + 0.06 * abs(s1), 2)
+            mmxu.values["Hz.mag.f"] = round(50.0 + 0.015 * s3, 3)
+            return
+
+        # Breaker closed — normal loaded feeder with load fluctuation
+        mmxu.values["PhV.phsA.cVal.mag.f"] = round(110.0 + 0.7 * s1 + 0.25 * s3, 2)
+        mmxu.values["A.phsA.cVal.mag.f"] = round(450.0 + 28.0 * s2 + 12.0 * s1, 1)
+        mmxu.values["TotW.mag.f"] = round(12.5 + 0.6 * s1 + 0.35 * s2, 2)
+        mmxu.values["TotVAr.mag.f"] = round(2.1 + 0.18 * s2 + 0.08 * s3, 2)
+        mmxu.values["Hz.mag.f"] = round(50.0 + 0.025 * s3, 3)
 
     def apply_normal_state(self) -> None:
         """Restore normal operating conditions."""

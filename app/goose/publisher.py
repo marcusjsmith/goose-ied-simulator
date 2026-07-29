@@ -7,10 +7,12 @@ import struct
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Callable
 
 from app.goose import asn1
 from app.goose.datatypes import GooseDataValue
+from app.goose.message_detail import build_dataset_breakout, format_utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +67,54 @@ class GoosePublisher:
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _socket = None
     _on_publish: Callable[[dict], None] | None = None
+    _message_seq: int = 0
 
     @property
     def dst_mac(self) -> str:
         return appid_to_multicast_mac(self.config.app_id)
+
+    def _current_timestamp_parts(self) -> tuple[int, int]:
+        now = time.time()
+        seconds = int(now)
+        fraction = int((now - seconds) * 0xFFFFFF)
+        return seconds, fraction
+
+    def build_message_detail(self, frame: bytes, state_change: bool) -> dict:
+        self._message_seq += 1
+        seconds, fraction = self._current_timestamp_parts()
+        with self._lock:
+            dataset = list(self.dataset)
+            st_num = self._st_num
+            sq_num = self._sq_num
+
+        return {
+            "id": self._message_seq,
+            "time": datetime.now(timezone.utc).isoformat(),
+            "state_change": state_change,
+            "ethernet": {
+                "dst_mac": self.dst_mac,
+                "src_mac": self.config.src_mac,
+                "ethertype": "0x88B8",
+                "app_id": f"0x{self.config.app_id:04X}",
+                "length": len(frame) - 14,
+            },
+            "goose_pdu": {
+                "gocb_ref": self.config.gocb_ref,
+                "time_allowed_to_live_ms": self.config.time_allowed_to_live_ms,
+                "dat_set": self.config.dat_set,
+                "go_id": self.config.go_id,
+                "timestamp": format_utc_timestamp(seconds, fraction),
+                "st_num": st_num,
+                "sq_num": sq_num,
+                "test": False,
+                "conf_rev": self.config.conf_rev,
+                "nds_com": False,
+                "num_dat_set_entries": len(dataset),
+            },
+            "dataset": build_dataset_breakout(dataset),
+            "frame_len": len(frame),
+            "frame_hex": frame.hex(),
+        }
 
     def set_dataset(self, values: list[GooseDataValue]) -> None:
         with self._lock:
@@ -127,13 +173,15 @@ class GoosePublisher:
 
     def publish_once(self, state_change: bool = False) -> dict:
         frame = self.build_frame(retransmit=not state_change)
+        detail = self.build_message_detail(frame, state_change=state_change)
         stats = {
-            "st_num": self._st_num,
-            "sq_num": self._sq_num,
+            "st_num": detail["goose_pdu"]["st_num"],
+            "sq_num": detail["goose_pdu"]["sq_num"],
             "dst_mac": self.dst_mac,
             "frame_len": len(frame),
-            "entries": len(self.dataset),
+            "entries": detail["goose_pdu"]["num_dat_set_entries"],
             "timestamp": time.time(),
+            "message_id": detail["id"],
         }
 
         if self.config.simulation_mode:
@@ -144,7 +192,7 @@ class GoosePublisher:
             self._socket.send(frame)
 
         if self._on_publish:
-            self._on_publish(stats)
+            self._on_publish({**stats, "detail": detail})
         return stats
 
     def trigger_state_change(self) -> dict:
