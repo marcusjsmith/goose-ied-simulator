@@ -86,9 +86,11 @@ def sync_publisher_dataset(trigger: bool = False) -> dict | None:
         return None
     with _state_lock:
         dataset = state.build_goose_dataset()
+        running = state.publisher_running
+        simulation = publisher.config.simulation_mode
     # Publish outside state lock – on_publish callback also acquires _state_lock
     publisher.set_dataset(dataset)
-    if trigger:
+    if trigger and (running or simulation):
         return publisher.trigger_state_change()
     return None
 
@@ -96,7 +98,14 @@ def sync_publisher_dataset(trigger: bool = False) -> dict | None:
 def get_state_dict() -> dict:
     with _state_lock:
         data = state.to_dict()
-        data["goose_message_log"] = list(_goose_message_log)
+        # Omit heavy frame hex from older log entries to keep WebSocket payloads small
+        log = []
+        for i, entry in enumerate(_goose_message_log):
+            item = dict(entry)
+            if i > 0 and "frame_hex" in item:
+                item["frame_hex"] = None
+            log.append(item)
+        data["goose_message_log"] = log
         data["latest_goose_message"] = _goose_message_log[0] if _goose_message_log else None
         if publisher:
             data["goose_config"] = {

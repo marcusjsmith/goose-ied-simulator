@@ -3,16 +3,33 @@
 let ws = null;
 let state = null;
 let expandedMessageId = null;
+let lastLogHeadId = null;
 let userPinnedScroll = false;
 let lastReadings = { v: null, i: null, p: null };
+let lastAvailableLnKeys = '';
+let lastActiveLnKeys = '';
+let expandedLnKeys = new Set();
 
 const API = {
-  post: (path, body = {}) =>
-    fetch(path, {
+  post: async (path, body = {}) => {
+    const res = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-    }).then(r => r.json()),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = data.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((d) => d.msg).join(', ')
+          : `Request failed (${res.status})`;
+      throw new Error(msg);
+    }
+    return data;
+  },
+  state: () => fetch('/api/state').then(r => r.json()),
 };
 
 function connectWebSocket() {
@@ -143,17 +160,64 @@ function updateFaultList(data) {
 
 function updateLNSelect(data) {
   const select = document.getElementById('ln-add-select');
+  const btnAdd = document.getElementById('btn-add-ln');
   const available = (data.available_lns || []).filter(ln => !ln.active);
+  const keys = available.map(ln => ln.key).join(',');
+
+  if (keys === lastAvailableLnKeys && select.options.length > 0) {
+    return;
+  }
+  lastAvailableLnKeys = keys;
+
+  const previous = select.value;
+  if (!available.length) {
+    select.innerHTML = '<option value="">All nodes active</option>';
+    select.disabled = true;
+    btnAdd.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  btnAdd.disabled = false;
   select.innerHTML = available.map(ln =>
     `<option value="${ln.key}">${ln.ln_name} – ${ln.description}</option>`
   ).join('');
+
+  if (previous && available.some(ln => ln.key === previous)) {
+    select.value = previous;
+  }
 }
 
 function updateLNList(data) {
   const container = document.getElementById('ln-list');
   if (!data.active_nodes) return;
 
+  const keys = data.active_nodes.map(n => n.key).join(',');
+  const structureChanged = keys !== lastActiveLnKeys;
+  lastActiveLnKeys = keys;
+
+  if (!structureChanged && container.children.length > 0) {
+    data.active_nodes.forEach(node => {
+      const card = container.querySelector(`.ln-card[data-ln="${node.key}"]`);
+      if (!card) return;
+      node.available_attributes.forEach(a => {
+        const row = card.querySelector(`.attr-toggle[data-da="${a.name}"]`)?.closest('.attr-row');
+        if (!row) return;
+        const val = node.values[a.name];
+        const displayVal = typeof val === 'boolean' ? (val ? 'TRUE' : 'false') : val;
+        const valEl = row.querySelector('.attr-val');
+        if (valEl) valEl.textContent = displayVal;
+      });
+    });
+    return;
+  }
+
+  container.querySelectorAll('.ln-card.expanded').forEach(card => {
+    expandedLnKeys.add(card.dataset.ln);
+  });
+
   container.innerHTML = data.active_nodes.map(node => {
+    const expanded = expandedLnKeys.has(node.key);
     const attrs = node.available_attributes.map(a => {
       const enabled = node.enabled_attributes.includes(a.name);
       const val = node.values[a.name];
@@ -168,13 +232,13 @@ function updateLNList(data) {
     }).join('');
 
     return `
-      <div class="ln-card" data-ln="${node.key}">
+      <div class="ln-card ${expanded ? 'expanded' : ''}" data-ln="${node.key}">
         <div class="ln-card-header">
           <div>
             <div class="ln-name">${node.ln_name}</div>
             <div class="ln-desc">${node.description}</div>
           </div>
-          <button class="ln-remove" data-ln="${node.key}" title="Remove from GOOSE dataset">×</button>
+          <button type="button" class="ln-remove" data-ln="${node.key}" title="Remove from GOOSE dataset">×</button>
         </div>
         <div class="ln-attrs">${attrs}</div>
       </div>`;
@@ -183,14 +247,22 @@ function updateLNList(data) {
   container.querySelectorAll('.ln-card-header').forEach(hdr => {
     hdr.addEventListener('click', (e) => {
       if (e.target.classList.contains('ln-remove')) return;
+      const key = hdr.parentElement.dataset.ln;
       hdr.parentElement.classList.toggle('expanded');
+      if (hdr.parentElement.classList.contains('expanded')) {
+        expandedLnKeys.add(key);
+      } else {
+        expandedLnKeys.delete(key);
+      }
     });
   });
 
   container.querySelectorAll('.ln-remove').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      API.post('/api/logical-nodes/remove', { ln_key: btn.dataset.ln });
+      API.post('/api/logical-nodes/remove', { ln_key: btn.dataset.ln })
+        .then(refreshState)
+        .catch(showError);
     });
   });
 
@@ -200,9 +272,19 @@ function updateLNList(data) {
         ln_key: cb.dataset.ln,
         da_name: cb.dataset.da,
         enabled: cb.checked,
-      });
+      }).catch(showError);
     });
   });
+}
+
+async function refreshState() {
+  render(await API.state());
+}
+
+function showError(err) {
+  console.error(err);
+  const msg = typeof err.message === 'string' ? err.message : 'Request failed';
+  alert(msg);
 }
 
 function updateStats(data) {
@@ -307,11 +389,14 @@ function updateGooseLog(data) {
   if (!log.length) {
     windowEl.innerHTML = '<div class="goose-log-empty">Start GOOSE publishing to see live messages and payload breakout here.</div>';
     expandedMessageId = null;
+    lastLogHeadId = null;
     return;
   }
 
-  if (expandedMessageId == null && log[0]) {
-    expandedMessageId = log[0].id;
+  const headId = log[0]?.id ?? null;
+  if (headId !== lastLogHeadId) {
+    expandedMessageId = headId;
+    lastLogHeadId = headId;
   }
 
   const wasAtTop = windowEl.scrollTop < 20;
@@ -340,15 +425,6 @@ function updateGooseLog(data) {
     `;
   }).join('');
 
-  windowEl.querySelectorAll('.goose-msg-header').forEach(hdr => {
-    hdr.addEventListener('click', () => {
-      const msgEl = hdr.parentElement;
-      const id = Number(msgEl.dataset.id);
-      expandedMessageId = msgEl.classList.contains('expanded') ? null : id;
-      msgEl.classList.toggle('expanded');
-    });
-  });
-
   if (wasAtTop && !userPinnedScroll) {
     windowEl.scrollTop = 0;
   }
@@ -358,19 +434,41 @@ document.getElementById('goose-log-window')?.addEventListener('scroll', (e) => {
   userPinnedScroll = e.target.scrollTop > 30;
 });
 
+document.getElementById('goose-log-window')?.addEventListener('click', (e) => {
+  const hdr = e.target.closest('.goose-msg-header');
+  if (!hdr) return;
+  const msgEl = hdr.closest('.goose-msg');
+  if (!msgEl) return;
+  const id = Number(msgEl.dataset.id);
+  expandedMessageId = expandedMessageId === id ? null : id;
+  document.querySelectorAll('#goose-log-window .goose-msg').forEach(el => {
+    el.classList.toggle('expanded', Number(el.dataset.id) === expandedMessageId);
+  });
+});
+
 document.getElementById('btn-start').addEventListener('click', () => API.post('/api/publisher/start'));
 document.getElementById('btn-stop').addEventListener('click', () => API.post('/api/publisher/stop'));
 document.getElementById('btn-publish').addEventListener('click', () => API.post('/api/publisher/publish'));
 document.getElementById('btn-clear-log').addEventListener('click', () => {
   expandedMessageId = null;
+  lastLogHeadId = null;
   userPinnedScroll = false;
   API.post('/api/goose/messages/clear');
 });
 document.getElementById('btn-toggle-breaker').addEventListener('click', () => API.post('/api/breaker/toggle'));
 document.getElementById('btn-clear-fault').addEventListener('click', () => API.post('/api/fault/clear'));
-document.getElementById('btn-add-ln').addEventListener('click', () => {
+document.getElementById('btn-add-ln').addEventListener('click', async () => {
   const select = document.getElementById('ln-add-select');
-  if (select.value) API.post('/api/logical-nodes/add', { ln_key: select.value });
+  const lnKey = select.value;
+  if (!lnKey) return;
+  try {
+    await API.post('/api/logical-nodes/add', { ln_key: lnKey });
+    expandedLnKeys.add(lnKey);
+    lastAvailableLnKeys = '';
+    await refreshState();
+  } catch (err) {
+    showError(err);
+  }
 });
 
 connectWebSocket();

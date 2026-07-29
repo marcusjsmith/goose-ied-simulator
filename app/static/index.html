@@ -165,11 +165,13 @@
         <button class="btn btn-outline btn-block" id="btn-clear-fault">Clear Fault / Restore Normal</button>
       </section>
 
-      <section class="panel">
+      <section class="panel ln-panel">
         <div class="panel-header">
           <h2>Logical Nodes</h2>
-          <select id="ln-add-select" class="select"></select>
-          <button class="btn btn-sm btn-primary" id="btn-add-ln">+ Add</button>
+        </div>
+        <div class="ln-add-row">
+          <select id="ln-add-select" class="select ln-add-select"></select>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-add-ln">+ Add</button>
         </div>
         <div class="ln-list" id="ln-list"></div>
       </section>
