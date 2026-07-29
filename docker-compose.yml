@@ -1,0 +1,21 @@
+services:
+  goose-ied-simulator:
+    build: .
+    container_name: goose-ied-simulator
+    ports:
+      - "8082:8080"
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      - GOOSE_INTERFACE=${GOOSE_INTERFACE:-eth0}
+      - GOOSE_APP_ID=${GOOSE_APP_ID:-0x0001}
+      - GOOSE_SRC_MAC=${GOOSE_SRC_MAC:-00:30:A7:00:01:01}
+      - GOOSE_GOCB_REF=DEMO_IED/LLN0$$GO$$GcbDemo
+      - GOOSE_DATASET=DEMO_IED/LLN0$$dsGooseDemo
+      - GOOSE_GO_ID=${GOOSE_GO_ID:-DEMO_IED_GOOSE}
+      - GOOSE_CONF_REV=${GOOSE_CONF_REV:-1}
+      - GOOSE_TTL_MS=${GOOSE_TTL_MS:-5000}
+      - GOOSE_MIN_INTERVAL_MS=${GOOSE_MIN_INTERVAL_MS:-100}
+      - GOOSE_SIMULATION_MODE=${GOOSE_SIMULATION_MODE:-true}
+    restart: unless-stopped

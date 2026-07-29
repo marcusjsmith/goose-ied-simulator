@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IEC 61850 GOOSE IED Simulator</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="header">
+    <div class="header-brand">
+      <div class="logo">⚡</div>
+      <div>
+        <h1>IEC 61850 GOOSE IED Simulator</h1>
+        <p class="subtitle">Substation demo · Multicast GOOSE publisher</p>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="status-pill" id="publisher-status">
+        <span class="dot"></span>
+        <span>Publisher Stopped</span>
+      </div>
+      <div class="status-pill goose-info" id="goose-info">—</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel sld-panel">
+      <div class="panel-header">
+        <h2>Single Line Diagram</h2>
+        <span class="ied-badge">IED: DEMO_IED</span>
+      </div>
+      <div class="sld-container">
+        <svg id="sld" viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#00BCFF"/>
+            </marker>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- Background grid -->
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1a2332" stroke-width="0.5"/>
+          </pattern>
+          <rect width="900" height="420" fill="url(#grid)"/>
+
+          <!-- 110 kV Bus -->
+          <line x1="80" y1="80" x2="820" y2="80" class="bus-line"/>
+          <text x="430" y="65" class="label bus-label">110 kV BUS BAR</text>
+
+          <!-- Feeder 1 branch -->
+          <line x1="200" y1="80" x2="200" y2="130" class="feeder-line"/>
+          <line x1="200" y1="130" x2="200" y2="170" class="feeder-line"/>
+
+          <!-- Disconnector (CSWI) -->
+          <g id="disconnector" transform="translate(200,170)">
+            <line x1="0" y1="0" x2="0" y2="-15" class="feeder-line"/>
+            <line x1="-12" y1="0" x2="12" y2="0" class="switch-blade" id="sw-blade"/>
+            <circle cx="0" cy="0" r="4" class="junction"/>
+            <line x1="0" y1="0" x2="0" y2="25" class="feeder-line"/>
+          </g>
+          <text x="230" y="175" class="label">DS1 (CSWI1)</text>
+
+          <!-- Circuit Breaker (XCBR) -->
+          <g id="breaker" transform="translate(200,220)">
+            <rect x="-18" y="-12" width="36" height="24" rx="3" class="breaker-box" id="breaker-box"/>
+            <line x1="0" y1="-12" x2="0" y2="-35" class="feeder-line"/>
+            <line x1="0" y1="12" x2="0" y2="35" class="feeder-line"/>
+            <text x="0" y="5" class="breaker-text" id="breaker-text">CB</text>
+          </g>
+          <text x="230" y="225" class="label">CB1 (XCBR1)</text>
+
+          <!-- Load line -->
+          <line x1="200" y1="255" x2="200" y2="320" class="feeder-line"/>
+          <rect x="170" y="320" width="60" height="40" rx="4" class="load-box"/>
+          <text x="200" y="345" class="label load-label">LOAD</text>
+          <text x="200" y="375" class="label reading" id="load-power">12.5 MW</text>
+
+          <!-- CT / VT symbols -->
+          <g transform="translate(160,260)">
+            <circle cx="0" cy="0" r="10" class="instrument"/>
+            <text x="0" y="4" class="inst-text">CT</text>
+          </g>
+          <g transform="translate(240,260)">
+            <circle cx="0" cy="0" r="10" class="instrument"/>
+            <text x="0" y="4" class="inst-text">VT</text>
+          </g>
+
+          <!-- IED box -->
+          <g id="ied-box" transform="translate(500,140)">
+            <rect x="0" y="0" width="200" height="160" rx="8" class="ied-rect"/>
+            <text x="100" y="28" class="ied-title">DEMO_IED</text>
+            <text x="100" y="50" class="ied-sub">Protection &amp; Control</text>
+            <line x1="15" y1="60" x2="185" y2="60" stroke="#2d3748"/>
+            <text x="20" y="82" class="ied-reading">V: <tspan id="ied-voltage">110.0 kV</tspan></text>
+            <text x="20" y="102" class="ied-reading">I: <tspan id="ied-current">450 A</tspan></text>
+            <text x="20" y="122" class="ied-reading">P: <tspan id="ied-power">12.5 MW</tspan></text>
+            <text x="20" y="142" class="ied-reading">f: <tspan id="ied-freq">50.0 Hz</tspan></text>
+            <circle cx="185" cy="20" r="6" class="ied-led" id="ied-led"/>
+          </g>
+
+          <!-- GOOSE multicast arrow -->
+          <path d="M 500 200 Q 380 200 280 200" class="goose-path" marker-end="url(#arrow)"/>
+          <text x="380" y="190" class="label goose-label">GOOSE Multicast</text>
+          <text x="380" y="215" class="label goose-mac" id="goose-mac">01:0C:CD:01:00:01</text>
+
+          <!-- Fault overlay -->
+          <g id="fault-overlay" class="hidden">
+            <rect x="0" y="0" width="900" height="420" class="fault-flash"/>
+            <text x="450" y="210" class="fault-text" id="fault-text">FAULT</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="sld-controls">
+        <button class="btn btn-primary" id="btn-toggle-breaker">Toggle Breaker</button>
+        <button class="btn btn-success" id="btn-start">Start GOOSE</button>
+        <button class="btn btn-danger" id="btn-stop">Stop GOOSE</button>
+        <button class="btn btn-secondary" id="btn-publish">Publish Now</button>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <section class="panel">
+        <div class="panel-header"><h2>Fault Simulation</h2></div>
+        <div class="fault-list" id="fault-list"></div>
+        <button class="btn btn-outline btn-block" id="btn-clear-fault">Clear Fault / Restore Normal</button>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Logical Nodes</h2>
+          <select id="ln-add-select" class="select"></select>
+          <button class="btn btn-sm btn-primary" id="btn-add-ln">+ Add</button>
+        </div>
+        <div class="ln-list" id="ln-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header"><h2>GOOSE Statistics</h2></div>
+        <dl class="stats-grid" id="goose-stats">
+          <dt>State Number</dt><dd id="stat-stnum">—</dd>
+          <dt>Sequence Number</dt><dd id="stat-sqnum">—</dd>
+          <dt>Dataset Entries</dt><dd id="stat-entries">—</dd>
+          <dt>Frame Size</dt><dd id="stat-frame">—</dd>
+        </dl>
+      </section>
+    </aside>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
