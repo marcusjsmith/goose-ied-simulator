@@ -33,7 +33,7 @@
         <span class="ied-badge">IED: DEMO_IED</span>
       </div>
       <div class="sld-container">
-        <svg id="sld" viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+        <svg id="sld" viewBox="0 0 980 420" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
               <path d="M0,0 L6,3 L0,6 Z" fill="#00BCFF"/>
@@ -48,7 +48,7 @@
           <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
             <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1a2332" stroke-width="0.5"/>
           </pattern>
-          <rect width="900" height="420" fill="url(#grid)"/>
+          <rect width="980" height="420" fill="url(#grid)"/>
 
           <!-- 110 kV Bus -->
           <line x1="80" y1="80" x2="820" y2="80" class="bus-line"/>
@@ -113,12 +113,12 @@
           </g>
 
           <!-- GOOSE multicast to Station Bus switch -->
-          <path d="M 700 220 L 760 220" class="goose-path" id="goose-path" marker-end="url(#arrow)"/>
-          <text x="734" y="210" class="label goose-label">GOOSE Multicast</text>
-          <text x="734" y="235" class="label goose-mac" id="goose-mac">01:0C:CD:01:00:01</text>
+          <path d="M 700 220 L 840 220" class="goose-path" id="goose-path" marker-end="url(#arrow)"/>
+          <text x="770" y="204" class="label goose-label">GOOSE Multicast</text>
+          <text x="770" y="248" class="label goose-mac" id="goose-mac">01:0C:CD:01:00:01</text>
 
           <!-- Station Bus network switch -->
-          <g id="station-bus" transform="translate(760,195)">
+          <g id="station-bus" transform="translate(850,195)">
             <rect x="0" y="0" width="100" height="50" rx="4" class="switch-box"/>
             <text x="50" y="30" class="switch-title">Station Bus</text>
             <line x1="15" y1="50" x2="15" y2="58" class="switch-port"/>
@@ -131,8 +131,8 @@
 
           <!-- Fault overlay -->
           <g id="fault-overlay" class="hidden">
-            <rect x="0" y="0" width="900" height="420" class="fault-flash"/>
-            <text x="450" y="210" class="fault-text" id="fault-text">FAULT</text>
+            <rect x="0" y="0" width="980" height="420" class="fault-flash"/>
+            <text x="490" y="210" class="fault-text" id="fault-text">FAULT</text>
           </g>
         </svg>
       </div>
