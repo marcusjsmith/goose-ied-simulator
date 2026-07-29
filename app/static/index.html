@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IEC 61850 GOOSE IED Simulator</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/style.css?v=3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -82,7 +82,15 @@
           <text x="200" y="345" class="label load-label">LOAD</text>
           <text x="200" y="375" class="label reading" id="load-power">12.5 MW</text>
 
-          <!-- CT / VT symbols -->
+          <!-- IED sampling links (CT / VT → IED) — drawn under symbols, stop at instrument edges -->
+          <path d="M 145 268 L 95 268 L 95 148 L 500 148" class="ied-link ied-link-ct"/>
+          <path d="M 255 268 L 305 268 L 305 232 L 500 232" class="ied-link ied-link-vt"/>
+          <circle cx="500" cy="148" r="3" class="ied-port ied-port-ct"/>
+          <circle cx="500" cy="232" r="3" class="ied-port ied-port-vt"/>
+          <text x="108" y="262" class="label ied-link-label ied-link-label-ct">Current</text>
+          <text x="278" y="262" class="label ied-link-label ied-link-label-vt">Voltage</text>
+
+          <!-- CT / VT symbols (above link lines) -->
           <g id="ct-symbol" class="instrument-ct" transform="translate(155,268)">
             <circle cx="0" cy="0" r="10" class="instrument"/>
             <text x="0" y="4" class="inst-text">CT</text>
@@ -91,14 +99,6 @@
             <circle cx="0" cy="0" r="10" class="instrument"/>
             <text x="0" y="4" class="inst-text">VT</text>
           </g>
-
-          <!-- IED sampling links (CT / VT → IED) — separated routes, distinct colours -->
-          <path d="M 165 268 L 115 268 L 115 168 L 500 168" class="ied-link ied-link-ct"/>
-          <path d="M 255 268 L 305 268 L 305 232 L 500 232" class="ied-link ied-link-vt"/>
-          <circle cx="500" cy="168" r="3" class="ied-port ied-port-ct"/>
-          <circle cx="500" cy="232" r="3" class="ied-port ied-port-vt"/>
-          <text x="128" y="260" class="label ied-link-label ied-link-label-ct">Current</text>
-          <text x="278" y="260" class="label ied-link-label ied-link-label-vt">Voltage</text>
 
           <!-- IED box -->
           <g id="ied-box" transform="translate(500,140)">
@@ -190,6 +190,6 @@
     </aside>
   </main>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=3"></script>
 </body>
 </html>

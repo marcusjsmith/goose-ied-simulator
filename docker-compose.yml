@@ -19,3 +19,5 @@ services:
       - GOOSE_MIN_INTERVAL_MS=${GOOSE_MIN_INTERVAL_MS:-100}
       - GOOSE_SIMULATION_MODE=${GOOSE_SIMULATION_MODE:-true}
     restart: unless-stopped
+    volumes:
+      - ./app/static:/app/app/static:ro
