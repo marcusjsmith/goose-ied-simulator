@@ -22,5 +22,5 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
 
-# Raw sockets require CAP_NET_RAW; use host networking for multicast
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Raw sockets require CAP_NET_RAW; use host networking for L2 multicast on Linux/Pi
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${GOOSE_HTTP_PORT:-8080}"]

@@ -8,6 +8,7 @@ services:
       - NET_RAW
       - NET_ADMIN
     environment:
+      - GOOSE_IED_NAME=${GOOSE_IED_NAME:-DEMO_IED}
       - GOOSE_INTERFACE=${GOOSE_INTERFACE:-eth0}
       - GOOSE_APP_ID=${GOOSE_APP_ID:-0x0001}
       - GOOSE_SRC_MAC=${GOOSE_SRC_MAC:-00:30:A7:00:01:01}
@@ -18,6 +19,11 @@ services:
       - GOOSE_TTL_MS=${GOOSE_TTL_MS:-5000}
       - GOOSE_MIN_INTERVAL_MS=${GOOSE_MIN_INTERVAL_MS:-100}
       - GOOSE_SIMULATION_MODE=${GOOSE_SIMULATION_MODE:-true}
+      - GOOSE_TRANSPORT=${GOOSE_TRANSPORT:-udp}
+      - GOOSE_UDP_GROUP=${GOOSE_UDP_GROUP:-239.118.50.1}
+      - GOOSE_UDP_PORT=${GOOSE_UDP_PORT:-61850}
+      - GOOSE_SUBSCRIBE_APP_ID=${GOOSE_SUBSCRIBE_APP_ID:-0x0002}
+      - GOOSE_SUBSCRIBE_AUTO_START=${GOOSE_SUBSCRIBE_AUTO_START:-true}
     restart: unless-stopped
     volumes:
       - ./app/static:/app/app/static:ro

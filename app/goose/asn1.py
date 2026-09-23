@@ -70,3 +70,39 @@ def encode_structure(tag: int, members: list[bytes]) -> bytes:
 def encode_array(tag: int, items: list[bytes]) -> bytes:
     payload = b"".join(items)
     return encode_tlv(tag, payload)
+
+
+def decode_length(data: bytes, offset: int) -> tuple[int, int]:
+    if offset >= len(data):
+        raise ValueError("truncated ASN.1 length")
+    first = data[offset]
+    if first < 0x80:
+        return first, offset + 1
+    nbytes = first & 0x7F
+    if nbytes == 0 or nbytes > 4:
+        raise ValueError("unsupported ASN.1 length form")
+    end = offset + 1 + nbytes
+    if end > len(data):
+        raise ValueError("truncated ASN.1 long length")
+    length = int.from_bytes(data[offset + 1 : end], "big")
+    return length, end
+
+
+def decode_tlv(data: bytes, offset: int = 0) -> tuple[int, bytes, int]:
+    if offset >= len(data):
+        raise ValueError("truncated ASN.1 tag")
+    tag = data[offset]
+    length, pos = decode_length(data, offset + 1)
+    end = pos + length
+    if end > len(data):
+        raise ValueError("truncated ASN.1 value")
+    return tag, data[pos:end], end
+
+
+def iter_tlvs(data: bytes) -> list[tuple[int, bytes]]:
+    items: list[tuple[int, bytes]] = []
+    offset = 0
+    while offset < len(data):
+        tag, value, offset = decode_tlv(data, offset)
+        items.append((tag, value))
+    return items

@@ -5,6 +5,10 @@ let state = null;
 let expandedMessageId = null;
 let lastLogHeadId = null;
 let userPinnedScroll = false;
+let expandedRxMessageId = null;
+let lastRxLogHeadId = null;
+let userPinnedRxScroll = false;
+let activeLogTab = 'tx';
 let lastReadings = { v: null, i: null, p: null };
 let lastAvailableLnKeys = '';
 let lastActiveLnKeys = '';
@@ -46,12 +50,14 @@ function connectWebSocket() {
 
 function render(data) {
   updatePublisherStatus(data);
+  updateSubscriberStatus(data);
   updateSLD(data);
   updateFaultList(data);
   updateLNList(data);
   updateStats(data);
   updateLNSelect(data);
   updateGooseLog(data);
+  updateSubscribeLog(data);
 }
 
 function updatePublisherStatus(data) {
@@ -68,6 +74,54 @@ function updatePublisherStatus(data) {
   if (data.goose_config) {
     info.textContent = `${data.goose_config.dst_mac} · APPID ${data.goose_config.app_id}`;
     document.getElementById('goose-mac').textContent = data.goose_config.dst_mac;
+  }
+
+  if (data.ied_name) {
+    const badge = document.getElementById('ied-badge');
+    const title = document.getElementById('ied-title');
+    if (badge) badge.textContent = `IED: ${data.ied_name}`;
+    if (title) title.textContent = data.ied_name;
+  }
+}
+
+function updateSubscriberStatus(data) {
+  const sub = data.subscriber || {};
+  const pill = document.getElementById('subscriber-status');
+  const running = !!sub.running;
+  pill.classList.toggle('running', running);
+  let label = 'Subscriber Idle';
+  if (running && sub.stale) label = 'Subscriber Stale';
+  else if (running) label = 'Subscriber Listening';
+  pill.querySelector('span:last-child').textContent = label;
+
+  document.getElementById('goose-path-rx')?.classList.toggle('active', running && !sub.stale);
+
+  const last = sub.last_message || {};
+  const pdu = last.goose_pdu || {};
+  document.getElementById('sub-status').textContent = sub.last_error
+    ? 'Error'
+    : (running ? (sub.stale ? 'Listening (TTL expired)' : 'Listening') : 'Idle');
+  document.getElementById('sub-mac').textContent = sub.dst_mac || '—';
+  document.getElementById('sub-goid').textContent = pdu.go_id || '—';
+  document.getElementById('sub-nums').textContent =
+    pdu.st_num != null ? `${pdu.st_num} / ${pdu.sq_num}` : '—';
+  document.getElementById('sub-count').textContent = sub.rx_count ?? 0;
+  document.getElementById('subscribe-mac').textContent = sub.dst_mac || '—';
+
+  const hint = document.getElementById('subscribe-hint');
+  if (sub.last_error) {
+    hint.textContent = sub.last_error;
+    hint.classList.add('error');
+  } else {
+    hint.textContent = running
+      ? `Listening for APPID ${sub.app_id} on ${sub.transport} (${sub.udp_group}:${sub.udp_port})`
+      : 'Listens for another IED’s multicast GOOSE stream.';
+    hint.classList.remove('error');
+  }
+
+  const input = document.getElementById('subscribe-appid');
+  if (input && document.activeElement !== input && sub.app_id) {
+    input.value = sub.app_id;
   }
 }
 
@@ -379,28 +433,21 @@ function renderMessageBody(msg) {
   `;
 }
 
-function updateGooseLog(data) {
-  const log = data.goose_message_log || [];
-  const windowEl = document.getElementById('goose-log-window');
-  const countEl = document.getElementById('goose-log-count');
-
-  countEl.textContent = `${log.length} message${log.length === 1 ? '' : 's'}`;
-
+function fillLogWindow(windowEl, log, ctx, emptyText) {
+  if (!windowEl) return ctx;
   if (!log.length) {
-    windowEl.innerHTML = '<div class="goose-log-empty">Start GOOSE publishing to see live messages and payload breakout here.</div>';
-    expandedMessageId = null;
-    lastLogHeadId = null;
-    return;
+    windowEl.innerHTML = `<div class="goose-log-empty">${emptyText}</div>`;
+    return { ...ctx, expandedId: null, lastHeadId: null };
   }
 
+  let { expandedId, lastHeadId, pinned } = ctx;
   const headId = log[0]?.id ?? null;
-  if (headId !== lastLogHeadId) {
-    const isFirstEntry = lastLogHeadId === null;
+  if (headId !== lastHeadId) {
+    const isFirstEntry = lastHeadId === null;
     const isStateChange = log[0]?.state_change;
-    lastLogHeadId = headId;
-    // Only auto-expand state changes or the first message — not every retransmit
+    lastHeadId = headId;
     if (isStateChange || isFirstEntry) {
-      expandedMessageId = headId;
+      expandedId = headId;
     }
   }
 
@@ -409,8 +456,9 @@ function updateGooseLog(data) {
     const isStateChange = msg.state_change;
     const badgeClass = isStateChange ? 'state-change' : 'retransmit';
     const badgeText = isStateChange ? 'STATE CHANGE' : 'RETRANSMIT';
-    const expanded = msg.id === expandedMessageId;
+    const expanded = msg.id === expandedId;
     const pdu = msg.goose_pdu || {};
+    const goId = pdu.go_id ? ` · ${pdu.go_id}` : '';
 
     return `
       <div class="goose-msg ${isStateChange ? 'state-change' : ''} ${expanded ? 'expanded' : ''}" data-id="${msg.id}">
@@ -421,7 +469,7 @@ function updateGooseLog(data) {
             stNum=<span>${pdu.st_num ?? '—'}</span>
             sqNum=<span>${pdu.sq_num ?? '—'}</span>
             · ${msg.frame_len || 0}B
-            · ${pdu.num_dat_set_entries ?? 0} entries
+            · ${pdu.num_dat_set_entries ?? 0} entries${goId}
           </span>
           <span class="goose-msg-toggle">▼</span>
         </div>
@@ -430,9 +478,44 @@ function updateGooseLog(data) {
     `;
   }).join('');
 
-  if (wasAtTop && !userPinnedScroll) {
+  if (wasAtTop && !pinned) {
     windowEl.scrollTop = 0;
   }
+  return { expandedId, lastHeadId, pinned };
+}
+
+function updateGooseLogCount() {
+  const countEl = document.getElementById('goose-log-count');
+  if (!countEl || !state) return;
+  const log = activeLogTab === 'rx'
+    ? (state.subscribe_message_log || [])
+    : (state.goose_message_log || []);
+  const label = activeLogTab === 'rx' ? 'received' : 'published';
+  countEl.textContent = `${log.length} ${label}`;
+}
+
+function updateGooseLog(data) {
+  const result = fillLogWindow(
+    document.getElementById('goose-log-window'),
+    data.goose_message_log || [],
+    { expandedId: expandedMessageId, lastHeadId: lastLogHeadId, pinned: userPinnedScroll },
+    'Start GOOSE publishing to see live messages and payload breakout here.'
+  );
+  expandedMessageId = result.expandedId;
+  lastLogHeadId = result.lastHeadId;
+  updateGooseLogCount();
+}
+
+function updateSubscribeLog(data) {
+  const result = fillLogWindow(
+    document.getElementById('goose-rx-window'),
+    data.subscribe_message_log || [],
+    { expandedId: expandedRxMessageId, lastHeadId: lastRxLogHeadId, pinned: userPinnedRxScroll },
+    'Subscribe to a peer APPID to see received GOOSE messages here.'
+  );
+  expandedRxMessageId = result.expandedId;
+  lastRxLogHeadId = result.lastHeadId;
+  updateGooseLogCount();
 }
 
 document.getElementById('goose-log-window')?.addEventListener('scroll', (e) => {
@@ -451,10 +534,57 @@ document.getElementById('goose-log-window')?.addEventListener('click', (e) => {
   });
 });
 
+document.getElementById('goose-rx-window')?.addEventListener('scroll', (e) => {
+  userPinnedRxScroll = e.target.scrollTop > 30;
+});
+
+document.getElementById('goose-rx-window')?.addEventListener('click', (e) => {
+  const hdr = e.target.closest('.goose-msg-header');
+  if (!hdr) return;
+  const msgEl = hdr.closest('.goose-msg');
+  if (!msgEl) return;
+  const id = Number(msgEl.dataset.id);
+  expandedRxMessageId = expandedRxMessageId === id ? null : id;
+  document.querySelectorAll('#goose-rx-window .goose-msg').forEach(el => {
+    el.classList.toggle('expanded', Number(el.dataset.id) === expandedRxMessageId);
+  });
+});
+
+document.querySelectorAll('.log-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    activeLogTab = tab.dataset.log;
+    document.querySelectorAll('.log-tab').forEach(t => {
+      const on = t.dataset.log === activeLogTab;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const body = document.querySelector('.goose-log-body');
+    body?.classList.toggle('log-tx', activeLogTab === 'tx');
+    body?.classList.toggle('log-rx', activeLogTab === 'rx');
+    updateGooseLogCount();
+  });
+});
+
 document.getElementById('btn-start').addEventListener('click', () => API.post('/api/publisher/start'));
 document.getElementById('btn-stop').addEventListener('click', () => API.post('/api/publisher/stop'));
 document.getElementById('btn-publish').addEventListener('click', () => API.post('/api/publisher/publish'));
+document.getElementById('btn-sub-start')?.addEventListener('click', async () => {
+  const appId = document.getElementById('subscribe-appid')?.value || '0x0002';
+  try {
+    await API.post('/api/subscriber/start', { app_id: appId });
+  } catch (err) {
+    showError(err);
+  }
+});
+document.getElementById('btn-sub-stop')?.addEventListener('click', () => API.post('/api/subscriber/stop'));
 document.getElementById('btn-clear-log').addEventListener('click', () => {
+  if (activeLogTab === 'rx') {
+    expandedRxMessageId = null;
+    lastRxLogHeadId = null;
+    userPinnedRxScroll = false;
+    API.post('/api/goose/subscribe/messages/clear');
+    return;
+  }
   expandedMessageId = null;
   lastLogHeadId = null;
   userPinnedScroll = false;

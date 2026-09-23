@@ -1,0 +1,73 @@
+# Two IEDs that subscribe to each other's GOOSE stream.
+# Works on Mac/Windows Docker Desktop via UDP multicast overlay.
+# For real IEC 61850 L2 GOOSE on Linux/Raspberry Pi, use docker-compose.pi.yml
+#
+#   docker compose -f docker-compose.pair.yml up --build -d
+#   IED A: http://localhost:8082
+#   IED B: http://localhost:8083
+
+services:
+  ied-a:
+    build: .
+    container_name: goose-ied-a
+    ports:
+      - "8082:8080"
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      - GOOSE_IED_NAME=IED_A
+      - GOOSE_APP_ID=0x0001
+      - GOOSE_SRC_MAC=00:30:A7:00:01:01
+      - GOOSE_GOCB_REF=IED_A/LLN0$$GO$$GcbDemo
+      - GOOSE_DATASET=IED_A/LLN0$$dsGooseDemo
+      - GOOSE_GO_ID=IED_A_GOOSE
+      - GOOSE_SUBSCRIBE_APP_ID=0x0002
+      - GOOSE_SUBSCRIBE_AUTO_START=true
+      - GOOSE_SIMULATION_MODE=true
+      - GOOSE_TRANSPORT=udp
+      - GOOSE_UDP_GROUP=239.118.50.1
+      - GOOSE_UDP_PORT=61850
+      - GOOSE_TTL_MS=5000
+      - GOOSE_MIN_INTERVAL_MS=200
+    restart: unless-stopped
+    volumes:
+      - ./app/static:/app/app/static:ro
+    networks:
+      - goose-lan
+
+  ied-b:
+    build: .
+    container_name: goose-ied-b
+    ports:
+      - "8083:8080"
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      - GOOSE_IED_NAME=IED_B
+      - GOOSE_APP_ID=0x0002
+      - GOOSE_SRC_MAC=00:30:A7:00:01:02
+      - GOOSE_GOCB_REF=IED_B/LLN0$$GO$$GcbDemo
+      - GOOSE_DATASET=IED_B/LLN0$$dsGooseDemo
+      - GOOSE_GO_ID=IED_B_GOOSE
+      - GOOSE_SUBSCRIBE_APP_ID=0x0001
+      - GOOSE_SUBSCRIBE_AUTO_START=true
+      - GOOSE_SIMULATION_MODE=true
+      - GOOSE_TRANSPORT=udp
+      - GOOSE_UDP_GROUP=239.118.50.1
+      - GOOSE_UDP_PORT=61850
+      - GOOSE_TTL_MS=5000
+      - GOOSE_MIN_INTERVAL_MS=200
+    restart: unless-stopped
+    volumes:
+      - ./app/static:/app/app/static:ro
+    networks:
+      - goose-lan
+
+networks:
+  goose-lan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.118.0/24

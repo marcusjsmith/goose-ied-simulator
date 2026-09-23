@@ -54,6 +54,10 @@ class GooseConfig:
     min_interval_ms: int = 20
     max_interval_ms: int = 1000
     simulation_mode: bool = False
+    transport: str = "udp"
+    udp_group: str = "239.118.50.1"
+    udp_port: int = 61850
+    ied_name: str = "DEMO_IED"
 
 
 @dataclass
@@ -68,6 +72,7 @@ class GoosePublisher:
     _socket = None
     _on_publish: Callable[[dict], None] | None = None
     _message_seq: int = 0
+    _udp_socket = None
 
     @property
     def dst_mac(self) -> str:
@@ -184,12 +189,15 @@ class GoosePublisher:
             "message_id": detail["id"],
         }
 
-        if self.config.simulation_mode:
-            logger.debug("Simulation mode: GOOSE frame built (%d bytes)", len(frame))
-        else:
-            if self._socket is None:
-                raise RuntimeError("GOOSE publisher not started")
+        sent = False
+        if self._socket is not None:
             self._socket.send(frame)
+            sent = True
+        if self._udp_socket is not None:
+            self._udp_socket.sendto(frame, (self.config.udp_group, self.config.udp_port))
+            sent = True
+        if not sent:
+            logger.debug("Simulation mode: GOOSE frame built (%d bytes)", len(frame))
 
         if self._on_publish:
             self._on_publish({**stats, "detail": detail})
@@ -198,24 +206,50 @@ class GoosePublisher:
     def trigger_state_change(self) -> dict:
         return self.publish_once(state_change=True)
 
+    def _transport_modes(self) -> set[str]:
+        modes = {part.strip() for part in self.config.transport.lower().split("+")}
+        if "both" in modes:
+            return {"raw", "udp"}
+        return modes or {"udp"}
+
+    def _open_udp_publisher(self):
+        import socket
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+        return sock
+
     def start(self) -> None:
         if self._running:
             return
 
-        if not self.config.simulation_mode:
+        modes = self._transport_modes()
+        opened = []
+        if "raw" in modes and not self.config.simulation_mode:
             import socket
 
             nic = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
             nic.bind((self.config.interface, 0))
             self._socket = nic
+            opened.append("raw")
             logger.info(
                 "GOOSE publisher started on %s -> %s (APPID 0x%04X)",
                 self.config.interface,
                 self.dst_mac,
                 self.config.app_id,
             )
-        else:
-            logger.info("GOOSE publisher in simulation mode (no raw socket)")
+        if "udp" in modes:
+            self._udp_socket = self._open_udp_publisher()
+            opened.append("udp")
+            logger.info(
+                "GOOSE UDP overlay %s:%s (APPID 0x%04X)",
+                self.config.udp_group,
+                self.config.udp_port,
+                self.config.app_id,
+            )
+        if not opened:
+            logger.info("GOOSE publisher in simulation mode (no network transport)")
 
         self._running = True
         self._thread = threading.Thread(target=self._publish_loop, daemon=True)
@@ -229,6 +263,9 @@ class GoosePublisher:
         if self._socket:
             self._socket.close()
             self._socket = None
+        if self._udp_socket:
+            self._udp_socket.close()
+            self._udp_socket = None
 
     def _publish_loop(self) -> None:
         interval = self.config.min_interval_ms / 1000.0

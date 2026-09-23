@@ -1,0 +1,61 @@
+# Raspberry Pi / Linux host-network pair — real IEC 61850 L2 GOOSE (EtherType 0x88B8).
+#
+# Run on one Pi (two containers share the host NIC):
+#   GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d
+#   IED A: http://<pi-ip>:8080
+#   IED B: http://<pi-ip>:8081
+#
+# Or run IED A on Pi 1 and IED B on Pi 2 (same L2 / VLAN) by starting
+# only one service on each host:
+#   docker compose -f docker-compose.pi.yml up -d ied-a
+#
+# Raspberry Pi 5 often uses interface name `eth0` or `end0`. Check with: ip -br link
+
+services:
+  ied-a:
+    build: .
+    container_name: goose-ied-a
+    network_mode: host
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      - GOOSE_HTTP_PORT=8080
+      - GOOSE_IED_NAME=IED_A
+      - GOOSE_INTERFACE=${GOOSE_INTERFACE:-eth0}
+      - GOOSE_APP_ID=0x0001
+      - GOOSE_SRC_MAC=00:30:A7:00:01:01
+      - GOOSE_GOCB_REF=IED_A/LLN0$$GO$$GcbDemo
+      - GOOSE_DATASET=IED_A/LLN0$$dsGooseDemo
+      - GOOSE_GO_ID=IED_A_GOOSE
+      - GOOSE_SUBSCRIBE_APP_ID=0x0002
+      - GOOSE_SUBSCRIBE_AUTO_START=true
+      - GOOSE_SIMULATION_MODE=false
+      - GOOSE_TRANSPORT=raw
+      - GOOSE_TTL_MS=5000
+      - GOOSE_MIN_INTERVAL_MS=100
+    restart: unless-stopped
+
+  ied-b:
+    build: .
+    container_name: goose-ied-b
+    network_mode: host
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      - GOOSE_HTTP_PORT=8081
+      - GOOSE_IED_NAME=IED_B
+      - GOOSE_INTERFACE=${GOOSE_INTERFACE:-eth0}
+      - GOOSE_APP_ID=0x0002
+      - GOOSE_SRC_MAC=00:30:A7:00:01:02
+      - GOOSE_GOCB_REF=IED_B/LLN0$$GO$$GcbDemo
+      - GOOSE_DATASET=IED_B/LLN0$$dsGooseDemo
+      - GOOSE_GO_ID=IED_B_GOOSE
+      - GOOSE_SUBSCRIBE_APP_ID=0x0001
+      - GOOSE_SUBSCRIBE_AUTO_START=true
+      - GOOSE_SIMULATION_MODE=false
+      - GOOSE_TRANSPORT=raw
+      - GOOSE_TTL_MS=5000
+      - GOOSE_MIN_INTERVAL_MS=100
+    restart: unless-stopped

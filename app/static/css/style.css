@@ -189,7 +189,9 @@ body {
 .ied-led.fault { fill: var(--danger); animation: pulse 0.8s infinite; }
 .goose-path { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 8 5; opacity: 0.9; }
 .goose-path.active { animation: goose-flow 1s linear infinite; }
+.goose-path-rx { stroke: #7ee787; }
 .goose-label { fill: var(--accent); text-anchor: middle; font-size: 10px; }
+.goose-label-rx { fill: #7ee787; }
 .goose-mac { fill: var(--text-muted); text-anchor: middle; font-size: 9px; font-family: var(--mono); }
 .switch-box { fill: var(--surface2); stroke: var(--accent); stroke-width: 2; }
 .switch-title { fill: var(--text); font-size: 11px; font-weight: 600; text-anchor: middle; font-family: var(--font); }
@@ -409,9 +411,38 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   padding: 0.6rem 1rem;
   background: var(--surface2);
   border-bottom: 1px solid var(--border);
+}
+
+.goose-log-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.log-tab {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.72rem;
+  font-family: var(--font);
+  cursor: pointer;
+}
+
+.log-tab.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(0, 188, 255, 0.12);
+}
+
+.log-tab[data-log="rx"].active {
+  border-color: #7ee787;
+  background: rgba(126, 231, 135, 0.12);
 }
 
 .goose-log-header h3 {
@@ -439,6 +470,48 @@ body {
 
 .goose-log-body.ref-hidden .goose-log-ref {
   display: none;
+}
+
+.goose-log-body.log-rx #goose-log-window {
+  display: none;
+}
+
+.goose-log-body.log-tx #goose-rx-window,
+.goose-log-window.hidden {
+  display: none;
+}
+
+.goose-log-body.log-rx #goose-rx-window {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.subscribe-panel {
+  padding: 0.75rem 1rem 0.5rem;
+}
+
+.subscribe-label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.subscribe-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.55rem 0 0.45rem;
+}
+
+.subscribe-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.subscribe-hint.error {
+  color: var(--danger);
 }
 
 .goose-log-window {

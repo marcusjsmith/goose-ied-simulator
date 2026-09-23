@@ -1,35 +1,37 @@
 # IEC 61850 GOOSE IED Simulator — User Guide
 
-A Docker-based tool that simulates a substation **IED** (Intelligent Electronic Device) publishing **IEC 61850 GOOSE** multicast messages. Use the web UI to control breaker state, inject faults, and customise which logical nodes appear in the GOOSE payload — ideal for network demos, CyberVision visibility tests, and substation automation labs.
+A Docker-based tool that simulates a substation **IED** (Intelligent Electronic Device) publishing and **subscribing to IEC 61850 GOOSE** multicast messages. Use the web UI to control breaker state, inject faults, customise logical nodes, and receive another IED’s GOOSE stream — including two containers that subscribe to each other, on a laptop or a Raspberry Pi.
 
 ---
 
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Web UI Overview](#web-ui-overview)
-3. [Step-by-Step Demo Walkthrough](#step-by-step-demo-walkthrough)
-4. [Fault Simulation](#fault-simulation)
-5. [Managing Logical Nodes](#managing-logical-nodes)
-6. [Verifying GOOSE Traffic](#verifying-goose-traffic)
-7. [Configuration](#configuration)
-8. [Troubleshooting](#troubleshooting)
-9. [Reference](#reference)
+2. [Two IEDs subscribing to each other](#two-ieds-subscribing-to-each-other)
+3. [Raspberry Pi](#raspberry-pi)
+4. [Web UI Overview](#web-ui-overview)
+5. [Step-by-Step Demo Walkthrough](#step-by-step-demo-walkthrough)
+6. [Fault Simulation](#fault-simulation)
+7. [Managing Logical Nodes](#managing-logical-nodes)
+8. [Verifying GOOSE Traffic](#verifying-goose-traffic)
+9. [Configuration](#configuration)
+10. [Troubleshooting](#troubleshooting)
+11. [Reference](#reference)
 
 ---
 
 ## Getting Started
 
-### Option A — Docker (recommended for live demos)
+### Option A — Single container (Mac / Windows / Linux)
 
-Requires a **Linux host** with Docker. Host networking is needed so GOOSE frames are sent on the correct physical interface.
+Default compose maps the UI to **port 8082** and uses a UDP GOOSE overlay so subscribe works without raw Ethernet.
 
 ```bash
 cd goose-ied-simulator
 docker compose up --build -d
 ```
 
-Open the web UI at **http://localhost:8080** (or `http://<host-ip>:8080` from another machine on the network).
+Open **http://localhost:8082**.
 
 To stop:
 
@@ -37,32 +39,104 @@ To stop:
 docker compose down
 ```
 
-### Option B — Local development (Mac / Windows / no multicast)
+### Option B — Two IEDs that subscribe to each other
 
-Use simulation mode to run the UI and build GOOSE frames without sending them onto the network:
+```bash
+docker compose -f docker-compose.pair.yml up --build -d
+```
+
+| IED | UI | Publishes APPID | Subscribes to |
+|-----|----|-----------------|---------------|
+| IED_A | http://localhost:8082 | `0x0001` | `0x0002` |
+| IED_B | http://localhost:8083 | `0x0002` | `0x0001` |
+
+On each UI click **Start GOOSE**. The other IED’s **Received** tab should fill with decoded frames. See [Two IEDs subscribing to each other](#two-ieds-subscribing-to-each-other).
+
+### Option C — Local development (no Docker)
 
 ```bash
 cd goose-ied-simulator
 python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 
-GOOSE_SIMULATION_MODE=true uvicorn app.main:app --reload --port 8080
+GOOSE_SIMULATION_MODE=true GOOSE_TRANSPORT=udp uvicorn app.main:app --reload --port 8080
 ```
 
 Open **http://localhost:8080**.
 
-### Option C — Linux with real GOOSE output (no Docker)
+### Option D — Linux / Raspberry Pi with real L2 GOOSE
+
+Raw Ethernet (`EtherType 0x88B8`) needs host networking and `CAP_NET_RAW`. See [Raspberry Pi](#raspberry-pi).
 
 ```bash
-cd goose-ied-simulator
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-sudo GOOSE_INTERFACE=eth0 uvicorn app.main:app --host 0.0.0.0 --port 8080
+sudo GOOSE_INTERFACE=eth0 GOOSE_SIMULATION_MODE=false GOOSE_TRANSPORT=raw \
+  uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
-> **Note:** Raw socket access requires root (`sudo`) on Linux.
+---
+
+## Two IEDs subscribing to each other
+
+Each instance publishes on its own **APPID / multicast MAC** and listens for the peer APPID. Own frames are ignored (matched on source MAC and GoCB).
+
+**Transports**
+
+| Mode | Where it works | What is sent |
+|------|----------------|--------------|
+| `udp` | Docker Desktop (Mac/Windows), Linux bridge | Full GOOSE Ethernet frame as UDP multicast `239.118.50.1:61850` |
+| `raw` | Linux / Raspberry Pi host network | Real IEC 61850 L2 GOOSE (`01:0C:CD:01:XX:YY`, EtherType `0x88B8`) |
+| `both` | Linux when you want L2 plus the UDP overlay | Both of the above |
+
+Pair compose uses `udp` so two containers on one laptop can hear each other without a substation switch.
+
+1. Start the pair: `docker compose -f docker-compose.pair.yml up --build -d`
+2. Open IED_A (`:8082`) and IED_B (`:8083`)
+3. Click **Start GOOSE** on both
+4. Open the **Received** tab — you should see the peer `goID`, `stNum`, and dataset
+5. Toggle a breaker on IED_A — IED_B should show a **STATE CHANGE** (`sqNum` back to 0)
+
+---
+
+## Raspberry Pi
+
+The image is `linux/arm64` compatible (`python:3.12-slim-bookworm`). Use Raspberry Pi OS **64-bit** with Docker installed.
+
+```bash
+# On the Pi, from the project directory
+sudo apt-get update && sudo apt-get install -y docker.io docker-compose-plugin
+sudo usermod -aG docker $USER   # then log out/in
+
+# Confirm the wired interface name (Pi 5 may be eth0 or end0)
+ip -br link
+```
+
+### Two IEDs on one Pi (host network, real GOOSE)
+
+```bash
+GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d
+```
+
+- IED_A UI: `http://<pi-ip>:8080` (APPID `0x0001`, subscribes to `0x0002`)
+- IED_B UI: `http://<pi-ip>:8081` (APPID `0x0002`, subscribes to `0x0001`)
+
+Both containers share the Pi NIC, so they exchange real L2 GOOSE on the LAN. A packet capture on the same VLAN will show EtherType `0x88b8`.
+
+### Two Raspberry Pis (one IED each)
+
+On Pi 1:
+
+```bash
+GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d ied-a
+```
+
+On Pi 2 (same L2 / VLAN, no router between them):
+
+```bash
+GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d ied-b
+```
+
+Start publishing on both UIs. Each Pi subscribes to the other’s multicast MAC.
 
 ---
 
@@ -74,7 +148,8 @@ The UI is split into three areas:
 | Element | Meaning |
 |---------|---------|
 | **Publisher Stopped / Running** | Green pulsing dot = GOOSE messages are being sent periodically |
-| **Multicast MAC · APPID** | Destination address and APPID of the current GOOSE stream (e.g. `01:0C:CD:01:00:01 · APPID 0x0001`) |
+| **Subscriber Idle / Listening** | Green pulsing dot = this IED is listening for a peer APPID |
+| **Multicast MAC · APPID** | Destination address and APPID of **this** IED’s published stream |
 
 ### Single-Line Diagram (main panel)
 An SVG diagram of a 110 kV feeder showing:
@@ -97,11 +172,12 @@ Below the diagram are four control buttons:
 | **Publish Now** | Send one immediate GOOSE message (increments `stNum`) |
 
 ### Right sidebar
-Three panels:
+Four panels:
 
-1. **Fault Simulation** — inject predefined fault scenarios
-2. **Logical Nodes** — add/remove LNs and toggle individual data attributes in the GOOSE payload
-3. **GOOSE Statistics** — live stNum, sqNum, dataset entry count, and frame size
+1. **GOOSE Subscriber** — peer APPID, start/stop listen, last received goID / stNum / sqNum
+2. **Fault Simulation** — inject predefined fault scenarios
+3. **Logical Nodes** — add/remove LNs and toggle individual data attributes in the GOOSE payload
+4. **GOOSE Statistics** — live stNum, sqNum, dataset entry count, and frame size
 
 ---
 
@@ -115,7 +191,7 @@ Follow this sequence for a typical network demo:
 docker compose up -d
 ```
 
-Browse to **http://\<demo-host\>:8080**.
+Browse to **http://\<demo-host\>:8082**.
 
 ### 2. Start GOOSE publishing
 
@@ -275,16 +351,23 @@ Set environment variables in `docker-compose.yml` or a `.env` file in the projec
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GOOSE_INTERFACE` | `eth0` | Network interface for GOOSE multicast egress |
+| `GOOSE_IED_NAME` | `DEMO_IED` | Display name on the SLD and default GoCB/dataset prefix |
+| `GOOSE_INTERFACE` | `eth0` | Network interface for raw GOOSE (Linux/Pi) |
 | `GOOSE_APP_ID` | `0x0001` | GOOSE APPID — also determines the multicast destination MAC |
 | `GOOSE_SRC_MAC` | `00:30:A7:00:01:01` | Source MAC address in GOOSE frames |
-| `GOOSE_GOCB_REF` | `DEMO_IED/LLN0$GO$GcbDemo` | GOOSE Control Block reference |
-| `GOOSE_DATASET` | `DEMO_IED/LLN0$dsGooseDemo` | Dataset reference string |
-| `GOOSE_GO_ID` | `DEMO_IED_GOOSE` | GOOSE ID |
+| `GOOSE_GOCB_REF` | `{IED}/LLN0$GO$GcbDemo` | GOOSE Control Block reference |
+| `GOOSE_DATASET` | `{IED}/LLN0$dsGooseDemo` | Dataset reference string |
+| `GOOSE_GO_ID` | `{IED}_GOOSE` | GOOSE ID |
 | `GOOSE_CONF_REV` | `1` | Configuration revision number |
 | `GOOSE_TTL_MS` | `5000` | Time Allowed to Live (ms) in each GOOSE message |
 | `GOOSE_MIN_INTERVAL_MS` | `100` | Retransmission interval (ms) |
-| `GOOSE_SIMULATION_MODE` | `false` | `true` = build frames but do not send (for Mac/dev) |
+| `GOOSE_SIMULATION_MODE` | `false` | `true` = do not open a raw Ethernet socket |
+| `GOOSE_TRANSPORT` | `udp` if simulation, else `both` | `udp`, `raw`, or `both` |
+| `GOOSE_UDP_GROUP` | `239.118.50.1` | UDP overlay multicast group |
+| `GOOSE_UDP_PORT` | `61850` | UDP overlay port |
+| `GOOSE_SUBSCRIBE_APP_ID` | peer of own APPID | APPID this IED listens for |
+| `GOOSE_SUBSCRIBE_AUTO_START` | `true` | Start the subscriber when the process boots |
+| `GOOSE_HTTP_PORT` | `8080` | HTTP port (used with host networking on Pi) |
 
 **Multicast MAC formula:** `01:0C:CD:01:XX:YY` where `XX:YY` = APPID in hex.  
 Example: APPID `0x0001` → MAC `01:0C:CD:01:00:01`.
@@ -327,6 +410,14 @@ sudo GOOSE_INTERFACE=eth0 uvicorn app.main:app --host 0.0.0.0 --port 8080
 
 In Docker, `CAP_NET_RAW` and `CAP_NET_ADMIN` are already granted via docker-compose.yml.
 
+### Received tab stays empty
+
+- Click **Start GOOSE** on the *peer* IED — subscribe only shows frames that arrive on the network
+- Confirm peer APPID in the Subscriber panel matches the other IED’s published APPID (`0x0001` ↔ `0x0002` in the pair compose file)
+- For laptop/Docker Desktop, use `docker-compose.pair.yml` (`GOOSE_TRANSPORT=udp`) so both containers share the `goose-lan` bridge
+- For Raspberry Pi / Linux L2 GOOSE, both hosts must be on the same VLAN; confirm with `sudo tcpdump -i eth0 ether proto 0x88b8`
+- Own frames are ignored — a single IED will not appear in its own Received tab
+
 ### Web UI not loading
 
 ```bash
@@ -336,8 +427,8 @@ docker compose ps
 # Check logs
 docker compose logs -f
 
-# Confirm port 8080 is listening
-curl http://localhost:8080/api/state
+# Confirm the mapped port is listening (8082 in the default compose file)
+curl http://localhost:8082/api/state
 ```
 
 ### Fault button clicked but breaker didn't change
@@ -364,6 +455,9 @@ curl http://localhost:8080/api/state
 | POST | `/api/publisher/start` | Start GOOSE publishing |
 | POST | `/api/publisher/stop` | Stop GOOSE publishing |
 | POST | `/api/publisher/publish` | Send one state-change message |
+| POST | `/api/subscriber/start` | `{"app_id":"0x0002"}` — listen for a peer stream |
+| POST | `/api/subscriber/stop` | Stop listening |
+| POST | `/api/goose/subscribe/messages/clear` | Clear received-message log |
 | POST | `/api/breaker/toggle` | Open/close breaker |
 | POST | `/api/fault/apply` | `{"fault_type": "overcurrent"}` |
 | POST | `/api/fault/clear` | Restore normal state |
@@ -387,8 +481,12 @@ Fault types for `/api/fault/apply`: `overcurrent`, `earth_fault`, `bus_different
 ├─────────────────────────────────────────────────────┤
 │  GOOSE Publisher (Python)                           │
 │  · ASN.1 BER encoder (IEC 61850-8-1)                │
-│  · Raw Ethernet socket (AF_PACKET)                  │
+│  · Raw Ethernet socket (AF_PACKET) and/or UDP       │
 │  · Multicast MAC 01:0C:CD:01:XX:YY                  │
+├─────────────────────────────────────────────────────┤
+│  GOOSE Subscriber                                   │
+│  · Raw / UDP listen, BER decoder                    │
+│  · Filters by peer APPID, ignores own GoCB/MAC      │
 └─────────────────────────────────────────────────────┘
 ```
 

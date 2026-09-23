@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IEC 61850 GOOSE IED Simulator</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=5">
+  <link rel="stylesheet" href="/static/css/style.css?v=6">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -14,7 +14,7 @@
       <div class="logo">⚡</div>
       <div>
         <h1>IEC 61850 GOOSE IED Simulator</h1>
-        <p class="subtitle">Substation demo · Multicast GOOSE publisher</p>
+        <p class="subtitle">Substation demo · GOOSE publisher &amp; subscriber</p>
       </div>
     </div>
     <div class="header-status">
@@ -23,6 +23,10 @@
         <span>Publisher Stopped</span>
       </div>
       <div class="status-pill goose-info" id="goose-info">—</div>
+      <div class="status-pill" id="subscriber-status">
+        <span class="dot"></span>
+        <span>Subscriber Idle</span>
+      </div>
     </div>
   </header>
 
@@ -30,13 +34,16 @@
     <section class="panel sld-panel">
       <div class="panel-header">
         <h2>Single Line Diagram</h2>
-        <span class="ied-badge">IED: DEMO_IED</span>
+        <span class="ied-badge" id="ied-badge">IED: DEMO_IED</span>
       </div>
       <div class="sld-container">
         <svg id="sld" viewBox="0 0 980 420" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
               <path d="M0,0 L6,3 L0,6 Z" fill="#00BCFF"/>
+            </marker>
+            <marker id="arrow-rx" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#7ee787"/>
             </marker>
             <filter id="glow">
               <feGaussianBlur stdDeviation="3" result="blur"/>
@@ -103,7 +110,7 @@
           <!-- IED box -->
           <g id="ied-box" transform="translate(500,140)">
             <rect x="0" y="0" width="200" height="160" rx="8" class="ied-rect"/>
-            <text x="100" y="28" class="ied-title">DEMO_IED</text>
+            <text x="100" y="28" class="ied-title" id="ied-title">DEMO_IED</text>
             <text x="100" y="50" class="ied-sub">Protection &amp; Control</text>
             <line x1="15" y1="60" x2="185" y2="60" stroke="#2d3748"/>
             <text x="20" y="82" class="ied-reading">V: <tspan id="ied-voltage">110.0 kV</tspan></text>
@@ -115,9 +122,14 @@
           </g>
 
           <!-- GOOSE multicast to Station Bus switch -->
-          <path d="M 700 220 L 840 220" class="goose-path" id="goose-path" marker-end="url(#arrow)"/>
-          <text x="770" y="204" class="label goose-label">GOOSE Multicast</text>
-          <text x="770" y="248" class="label goose-mac" id="goose-mac">01:0C:CD:01:00:01</text>
+          <path d="M 700 210 L 840 210" class="goose-path" id="goose-path" marker-end="url(#arrow)"/>
+          <text x="770" y="196" class="label goose-label">GOOSE Publish</text>
+          <text x="770" y="228" class="label goose-mac" id="goose-mac">01:0C:CD:01:00:01</text>
+
+          <!-- Incoming subscribed GOOSE from Station Bus -->
+          <path d="M 840 255 L 700 255" class="goose-path goose-path-rx" id="goose-path-rx" marker-end="url(#arrow-rx)"/>
+          <text x="770" y="248" class="label goose-label goose-label-rx">GOOSE Subscribe</text>
+          <text x="770" y="274" class="label goose-mac" id="subscribe-mac">01:0C:CD:01:00:02</text>
 
           <!-- Station Bus network switch -->
           <g id="station-bus" transform="translate(850,195)">
@@ -149,15 +161,22 @@
       <div class="goose-log-panel">
         <div class="goose-log-header">
           <h3>Live GOOSE Messages</h3>
+          <div class="goose-log-tabs" role="tablist">
+            <button type="button" class="log-tab active" data-log="tx" role="tab" aria-selected="true">Published</button>
+            <button type="button" class="log-tab" data-log="rx" role="tab" aria-selected="false">Received</button>
+          </div>
           <div class="goose-log-actions">
             <span class="goose-log-count" id="goose-log-count">0 messages</span>
             <button class="btn btn-sm btn-outline" type="button" id="btn-toggle-ref" aria-expanded="true" aria-controls="goose-log-ref">Hide Reference</button>
             <button class="btn btn-sm btn-outline" id="btn-clear-log">Clear</button>
           </div>
         </div>
-        <div class="goose-log-body">
+        <div class="goose-log-body log-tx">
           <div class="goose-log-window" id="goose-log-window">
             <div class="goose-log-empty">Start GOOSE publishing to see live messages and payload breakout here.</div>
+          </div>
+          <div class="goose-log-window hidden" id="goose-rx-window">
+            <div class="goose-log-empty">Subscribe to a peer APPID to see received GOOSE messages here.</div>
           </div>
           <aside class="goose-log-ref" id="goose-log-ref" aria-label="GOOSE parameter reference">
             <div class="goose-log-ref-title">Parameter Reference</div>
@@ -249,6 +268,26 @@
 
     <aside class="sidebar">
       <section class="panel">
+        <div class="panel-header"><h2>GOOSE Subscriber</h2></div>
+        <div class="subscribe-panel">
+          <label class="subscribe-label" for="subscribe-appid">Peer APPID</label>
+          <input id="subscribe-appid" class="select" spellcheck="false" placeholder="0x0002" value="0x0002">
+          <div class="subscribe-actions">
+            <button type="button" class="btn btn-sm btn-success" id="btn-sub-start">Start Subscribe</button>
+            <button type="button" class="btn btn-sm btn-danger" id="btn-sub-stop">Stop</button>
+          </div>
+          <p class="subscribe-hint" id="subscribe-hint">Listens for another IED’s multicast GOOSE stream.</p>
+          <dl class="stats-grid">
+            <dt>Status</dt><dd id="sub-status">Idle</dd>
+            <dt>Peer MAC</dt><dd id="sub-mac">—</dd>
+            <dt>Peer goID</dt><dd id="sub-goid">—</dd>
+            <dt>stNum / sqNum</dt><dd id="sub-nums">—</dd>
+            <dt>Received</dt><dd id="sub-count">0</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="panel">
         <div class="panel-header"><h2>Fault Simulation</h2></div>
         <div class="fault-list" id="fault-list"></div>
         <button class="btn btn-outline btn-block" id="btn-clear-fault">Clear Fault / Restore Normal</button>
@@ -277,6 +316,6 @@
     </aside>
   </main>
 
-  <script src="/static/js/app.js?v=4"></script>
+  <script src="/static/js/app.js?v=6"></script>
 </body>
 </html>
