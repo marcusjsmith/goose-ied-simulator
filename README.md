@@ -8,7 +8,7 @@ A Docker-based tool that simulates a substation **IED** (Intelligent Electronic 
 
 1. [Getting Started](#getting-started)
 2. [Two IEDs subscribing to each other](#two-ieds-subscribing-to-each-other)
-3. [Raspberry Pi](#raspberry-pi)
+3. [Raspberry Pi](#raspberry-pi) — including [two IEDs on two Raspberry Pis](#scenario--two-ieds-on-two-raspberry-pis)
 4. [Web UI Overview](#web-ui-overview)
 5. [Step-by-Step Demo Walkthrough](#step-by-step-demo-walkthrough)
 6. [Fault Simulation](#fault-simulation)
@@ -100,18 +100,145 @@ Pair compose uses `udp` so two containers on one laptop can hear each other with
 
 ## Raspberry Pi
 
-The image is `linux/arm64` compatible (`python:3.12-slim-bookworm`). Use Raspberry Pi OS **64-bit** with Docker installed.
+The image is `linux/arm64` compatible (`python:3.12-slim-bookworm`). Use **Raspberry Pi OS 64-bit** (Bookworm or later) with Docker.
+
+GOOSE is Layer-2 multicast. Two Pis only hear each other if they sit on the **same Ethernet VLAN / broadcast domain** — not across a router, NAT, or Wi‑Fi client isolation.
+
+### What you need
+
+| Item | Notes |
+|------|--------|
+| Two Raspberry Pis | Pi 4 or Pi 5 recommended, 64-bit OS |
+| Wired Ethernet | Use the RJ45 port, not Wi‑Fi. GOOSE multicast over WLAN is unreliable |
+| Same L2 network | Same switch (or same VLAN). No routing between the boxes |
+| This repository | Clone or copy `goose-ied-simulator` onto **both** Pis |
+
+### Prepare each Pi (do this on Pi 1 and Pi 2)
 
 ```bash
-# On the Pi, from the project directory
-sudo apt-get update && sudo apt-get install -y docker.io docker-compose-plugin
-sudo usermod -aG docker $USER   # then log out/in
+sudo apt-get update
+sudo apt-get install -y git docker.io docker-compose-plugin
+sudo usermod -aG docker "$USER"
+# Log out and back in (or reboot) so the docker group applies
 
-# Confirm the wired interface name (Pi 5 may be eth0 or end0)
+git clone https://github.com/marcusjsmith/goose-ied-simulator.git
+cd goose-ied-simulator
+
+# Confirm the wired interface name (Pi 5 is often eth0 or end0)
 ip -br link
 ```
 
+If the NIC is `end0` instead of `eth0`, pass `GOOSE_INTERFACE=end0` in the commands below.
+
+Optional: disable Wi‑Fi for the demo so all traffic uses Ethernet:
+
+```bash
+sudo rfkill block wifi
+```
+
+### Scenario — two IEDs on two Raspberry Pis
+
+This is the usual lab layout: **Pi 1 = IED_A** (publisher APPID `0x0001`) and **Pi 2 = IED_B** (publisher APPID `0x0002`). Each box runs **one** container with host networking so GOOSE frames leave the Pi’s Ethernet port as real IEC 61850 L2 multicast (`EtherType 0x88B8`).
+
+```
+  Pi 1 (IED_A)                         Pi 2 (IED_B)
+  APPID 0x0001  ──GOOSE──►  switch  ◄──GOOSE──  APPID 0x0002
+  listens 0x0002           same VLAN            listens 0x0001
+  UI :8080                                      UI :8080
+```
+
+| | Pi 1 — IED_A | Pi 2 — IED_B |
+|--|--------------|--------------|
+| Compose service | `ied-a` | `ied-b` |
+| IED name | `IED_A` | `IED_B` |
+| Publishes APPID | `0x0001` | `0x0002` |
+| Destination MAC | `01:0C:CD:01:00:01` | `01:0C:CD:01:00:02` |
+| Source MAC | `00:30:A7:00:01:01` | `00:30:A7:00:01:02` |
+| Subscribes to | `0x0002` | `0x0001` |
+| Web UI | `http://<pi-1-ip>:8080` | `http://<pi-2-ip>:8080` |
+| Transport | `raw` (real L2 GOOSE) | `raw` |
+
+`docker-compose.pi.yml` already encodes this pairing. You only start **one** service per Pi.
+
+**Pi 1 — deploy IED_A**
+
+```bash
+cd goose-ied-simulator
+GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d ied-a
+docker compose -f docker-compose.pi.yml ps
+```
+
+**Pi 2 — deploy IED_B**
+
+```bash
+cd goose-ied-simulator
+GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d ied-b
+docker compose -f docker-compose.pi.yml ps
+```
+
+Both UIs listen on host port **8080** because each Pi has its own network stack. Find the addresses with `hostname -I` (or your DHCP reservations).
+
+**Configure from the UI (same on both boxes)**
+
+1. Open Pi 1 at `http://<pi-1-ip>:8080` and Pi 2 at `http://<pi-2-ip>:8080`
+2. Confirm the header shows **IED_A** / APPID `0x0001` on Pi 1 and **IED_B** / APPID `0x0002` on Pi 2
+3. On each sidebar **GOOSE Subscriber** panel, confirm the peer APPID (`0x0002` on IED_A, `0x0001` on IED_B). The subscriber auto-starts; use **Start Subscribe** if the pill still says Idle
+4. Click **Start GOOSE** on **both** UIs
+5. Open the **Received** tab on each Pi — you should see the other IED’s `goID` (`IED_A_GOOSE` / `IED_B_GOOSE`), `stNum`, and dataset
+6. Toggle the breaker on Pi 1 — Pi 2 should show a **STATE CHANGE** (`sqNum` returns to 0)
+
+**Verify on the wire (from either Pi)**
+
+```bash
+# All GOOSE on the LAN
+sudo tcpdump -i eth0 -nn ether proto 0x88b8
+
+# Frames from IED_A
+sudo tcpdump -i eth0 -nn ether dst 01:0c:cd:01:00:01
+
+# Frames from IED_B
+sudo tcpdump -i eth0 -nn ether dst 01:0c:cd:01:00:02
+```
+
+You should see both destination MACs while both publishers are running.
+
+**Change the interface or APPID pairing**
+
+Create a `.env` next to the compose file on that Pi (do **not** use the same APPID on both boxes):
+
+```env
+# Example on Pi 1 if the NIC is end0
+GOOSE_INTERFACE=end0
+```
+
+Then recreate:
+
+```bash
+docker compose -f docker-compose.pi.yml up -d ied-a
+```
+
+To subscribe to a non-default peer APPID, set it in the **GOOSE Subscriber** panel and click **Start Subscribe**, or set `GOOSE_SUBSCRIBE_APP_ID` in the environment for that service.
+
+**Stop / update**
+
+```bash
+docker compose -f docker-compose.pi.yml down
+# After a git pull
+GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d ied-a   # or ied-b
+```
+
+**Two-Pi checklist if Received stays empty**
+
+- Both publishers are running (green **Publisher Running** pills)
+- Subscriber pills show **Listening**, peer APPIDs are swapped (`0x0001` ↔ `0x0002`)
+- Cables are in the **Ethernet** ports, same switch/VLAN, no router between them
+- `GOOSE_INTERFACE` matches `ip -br link` (`eth0` vs `end0`)
+- Managed switch is not filtering unknown multicast or EtherType `0x88B8` (disable IGMP snooping for the demo VLAN if needed)
+- `tcpdump` on each Pi sees the **other** destination MAC, not only its own
+
 ### Two IEDs on one Pi (host network, real GOOSE)
+
+Use this only when both containers share a single Pi’s NIC. UIs are on different ports because they share one host network namespace.
 
 ```bash
 GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d
@@ -120,23 +247,7 @@ GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d
 - IED_A UI: `http://<pi-ip>:8080` (APPID `0x0001`, subscribes to `0x0002`)
 - IED_B UI: `http://<pi-ip>:8081` (APPID `0x0002`, subscribes to `0x0001`)
 
-Both containers share the Pi NIC, so they exchange real L2 GOOSE on the LAN. A packet capture on the same VLAN will show EtherType `0x88b8`.
-
-### Two Raspberry Pis (one IED each)
-
-On Pi 1:
-
-```bash
-GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d ied-a
-```
-
-On Pi 2 (same L2 / VLAN, no router between them):
-
-```bash
-GOOSE_INTERFACE=eth0 docker compose -f docker-compose.pi.yml up --build -d ied-b
-```
-
-Start publishing on both UIs. Each Pi subscribes to the other’s multicast MAC.
+A packet capture on the same VLAN will show EtherType `0x88b8` for both APPIDs.
 
 ---
 
